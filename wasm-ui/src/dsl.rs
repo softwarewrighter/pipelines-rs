@@ -27,6 +27,8 @@
 //! - `COUNT` - Count records and emit summary (e.g., "COUNT=42")
 //! - `CHANGE "old" "new"` - Replace occurrences of old with new (sed-like)
 //! - `LITERAL "text"` - Append a literal record to the stream
+//! - `UPPER` - Convert records to uppercase
+//! - `LOWER` - Convert records to lowercase
 //! - Lines starting with `#` are comments
 
 use pipelines_rs::{Pipeline, Record};
@@ -127,6 +129,10 @@ enum Command {
     Change { old: String, new: String },
     /// LITERAL "text" - append a literal record
     Literal { text: String },
+    /// UPPER - convert to uppercase
+    Upper,
+    /// LOWER - convert to lowercase
+    Lower,
 }
 
 /// Parse DSL text into commands.
@@ -200,6 +206,10 @@ fn parse_command(line: &str) -> Result<Command, String> {
         parse_change(line)
     } else if upper.starts_with("LITERAL") {
         parse_literal(line)
+    } else if upper == "UPPER" || upper.starts_with("UPPER ") {
+        Ok(Command::Upper)
+    } else if upper == "LOWER" || upper.starts_with("LOWER ") {
+        Ok(Command::Lower)
     } else {
         Err(format!(
             "Unknown command: {}",
@@ -551,6 +561,18 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
             let mut result = records;
             result.push(Record::from_str(text));
             Ok(result)
+        }
+        Command::Upper => {
+            // Convert all records to uppercase
+            Ok(Pipeline::new(records.into_iter())
+                .map(|r| Record::from_str(&r.as_str().to_uppercase()))
+                .collect())
+        }
+        Command::Lower => {
+            // Convert all records to lowercase
+            Ok(Pipeline::new(records.into_iter())
+                .map(|r| Record::from_str(&r.as_str().to_lowercase()))
+                .collect())
         }
     }
 }
@@ -921,5 +943,70 @@ LINE TWO";
         // Order should be: DATA, HEADER, FOOTER (each LITERAL appends)
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_upper() {
+        let cmd = parse_command("UPPER").unwrap();
+        assert!(matches!(cmd, Command::Upper));
+    }
+
+    #[test]
+    fn test_parse_lower() {
+        let cmd = parse_command("LOWER").unwrap();
+        assert!(matches!(cmd, Command::Lower));
+    }
+
+    #[test]
+    fn test_execute_upper() {
+        let input = "Hello World
+mixed CASE text";
+        let pipeline = r#"PIPE CONSOLE
+| UPPER
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 2);
+        assert_eq!(output_count, 2);
+        assert!(output.contains("HELLO WORLD"));
+        assert!(output.contains("MIXED CASE TEXT"));
+        assert!(!output.contains("Hello"));
+        assert!(!output.contains("mixed"));
+    }
+
+    #[test]
+    fn test_execute_lower() {
+        let input = "Hello World
+MIXED CASE TEXT";
+        let pipeline = r#"PIPE CONSOLE
+| LOWER
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 2);
+        assert_eq!(output_count, 2);
+        assert!(output.contains("hello world"));
+        assert!(output.contains("mixed case text"));
+        assert!(!output.contains("Hello"));
+        assert!(!output.contains("MIXED"));
+    }
+
+    #[test]
+    fn test_execute_upper_lower_chain() {
+        let input = "Test Data";
+        let pipeline = r#"PIPE CONSOLE
+| UPPER
+| LOWER
+| CONSOLE
+?"#;
+
+        let (output, _input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(output_count, 1);
+        assert!(output.contains("test data"));
     }
 }
