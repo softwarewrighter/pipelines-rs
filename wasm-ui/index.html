@@ -11,6 +11,7 @@
             --text-color: #e8e8e8;
             --accent-color: #0f3460;
             --highlight-color: #e94560;
+            --header-color: #ff9f1c;
             --success-color: #00d26a;
             --mono-font: 'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
         }
@@ -42,14 +43,14 @@
         }
 
         .header h1 {
-            font-size: 1.5rem;
-            color: var(--highlight-color);
+            font-size: 2rem;
+            color: var(--header-color);
             margin-bottom: 0.25rem;
         }
 
         .subtitle {
-            font-size: 0.875rem;
-            color: #888;
+            font-size: 1rem;
+            color: var(--header-color);
         }
 
         .main {
@@ -90,15 +91,21 @@
         }
 
         .panel-header h2 {
-            font-size: 0.875rem;
+            font-size: 1.125rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            color: var(--header-color);
         }
 
-        .hint, .stats {
-            font-size: 0.75rem;
-            color: #888;
+        .hint {
+            font-size: 0.875rem;
+            color: var(--header-color);
+        }
+
+        .stats {
+            font-size: 0.875rem;
+            color: #bbb;
         }
 
         .panel-content {
@@ -110,8 +117,8 @@
         }
 
         .column-ruler {
-            font-size: 0.625rem;
-            color: #666;
+            font-size: 0.75rem;
+            color: #999;
             padding: 0.25rem 0.5rem;
             background-color: rgba(0, 0, 0, 0.2);
             border-radius: 2px;
@@ -128,7 +135,7 @@
             border-radius: 4px;
             color: var(--text-color);
             font-family: var(--mono-font);
-            font-size: 0.8125rem;
+            font-size: 1rem;
             padding: 0.75rem;
             resize: none;
             line-height: 1.5;
@@ -149,7 +156,7 @@
             border: 1px solid var(--accent-color);
             border-radius: 4px;
             padding: 0.75rem;
-            font-size: 0.8125rem;
+            font-size: 1rem;
             line-height: 1.5;
             overflow: auto;
             white-space: pre;
@@ -162,7 +169,7 @@
             border-radius: 4px;
             padding: 0.75rem;
             color: var(--highlight-color);
-            font-size: 0.8125rem;
+            font-size: 1rem;
         }
 
         .run-button {
@@ -172,7 +179,7 @@
             color: white;
             cursor: pointer;
             font-family: var(--mono-font);
-            font-size: 0.75rem;
+            font-size: 0.875rem;
             font-weight: 600;
             padding: 0.5rem 1.5rem;
             text-transform: uppercase;
@@ -194,8 +201,8 @@
 
         .dsl-help summary {
             cursor: pointer;
-            font-size: 0.75rem;
-            color: #888;
+            font-size: 0.875rem;
+            color: #bbb;
             padding: 0.25rem;
         }
 
@@ -207,7 +214,7 @@
             background-color: rgba(0, 0, 0, 0.3);
             border-radius: 4px;
             padding: 0.5rem;
-            font-size: 0.6875rem;
+            font-size: 0.875rem;
             margin-top: 0.5rem;
             overflow-x: auto;
         }
@@ -216,8 +223,8 @@
             background-color: var(--accent-color);
             padding: 0.5rem 2rem;
             text-align: center;
-            font-size: 0.75rem;
-            color: #666;
+            font-size: 0.875rem;
+            color: #bbb;
             border-top: 1px solid var(--accent-color);
         }
 
