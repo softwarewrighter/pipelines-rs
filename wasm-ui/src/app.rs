@@ -44,8 +44,11 @@ GARCIA  CARLOS    SALES     00045000
 TAYLOR  SUSAN     MARKETING 00065000
 BROWN   MICHAEL   ENGINEER  00090000"#;
 
-const DEFAULT_PIPELINE: &str = r#"PIPE FILTER 18,10 = "SALES"
-   | SELECT 0,8,0; 28,8,8?"#;
+const DEFAULT_PIPELINE: &str = r#"PIPE CONSOLE
+| FILTER 18,10 = "SALES"
+| SELECT 0,8,0; 28,8,8
+| CONSOLE
+?"#;
 
 /// Main application component.
 #[function_component(App)]

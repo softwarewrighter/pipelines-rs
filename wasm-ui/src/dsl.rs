@@ -2,16 +2,20 @@
 //!
 //! Pipeline format (CMS Pipelines style):
 //! ```text
-//! PIPE FILTER 18,10 = "SALES"
-//!    | SELECT 0,8,0; 28,8,8
-//!    | TAKE 10
+//! PIPE CONSOLE
+//! | FILTER 18,10 = "SALES"
+//! | SELECT 0,8,0; 28,8,8
+//! | CONSOLE
+//! ?
 //! ```
 //!
-//! - `PIPE` starts pipeline, followed by first stage on same line
-//! - `|` at start of line indicates continuation to next stage
-//! - Pipeline ends at last stage (no continuation)
+//! - `PIPE CONSOLE` starts pipeline, reading from input
+//! - `| <stage>` continues to next stage
+//! - `| CONSOLE` writes to output
+//! - `?` on its own line marks end of pipeline
 //!
 //! Supported stages:
+//! - `CONSOLE` - Read from input (first) or write to output (last)
 //! - `FILTER pos,len = "value"` - Keep records where field equals value
 //! - `FILTER pos,len != "value"` - Omit records where field equals value
 //! - `SELECT p1,l1,d1; p2,l2,d2; ...` - Select and reposition fields
@@ -28,7 +32,30 @@ pub fn execute_pipeline(
     input_text: &str,
     pipeline_text: &str,
 ) -> Result<(String, usize, usize), String> {
-    // Parse input records
+    // Parse pipeline commands
+    let commands = parse_commands(pipeline_text)?;
+
+    // Validate pipeline structure
+    if commands.is_empty() {
+        return Err("Pipeline is empty".to_string());
+    }
+
+    // Check first stage is CONSOLE (input)
+    if !matches!(commands.first(), Some(Command::Console)) {
+        return Err("Pipeline must start with CONSOLE".to_string());
+    }
+
+    // Check last stage is CONSOLE (output)
+    if !matches!(commands.last(), Some(Command::Console)) {
+        return Err("Pipeline must end with CONSOLE".to_string());
+    }
+
+    // Need at least 2 CONSOLE stages
+    if commands.len() < 2 {
+        return Err("Pipeline must have CONSOLE at start and end".to_string());
+    }
+
+    // Parse input records (CONSOLE reads from input)
     let input_records: Vec<Record> = input_text
         .lines()
         .filter(|line| !line.is_empty())
@@ -37,13 +64,13 @@ pub fn execute_pipeline(
 
     let input_count = input_records.len();
 
-    // Parse and apply pipeline commands
-    let commands = parse_commands(pipeline_text)?;
-    let output_records = apply_commands(input_records, &commands)?;
+    // Apply commands (skip first and last CONSOLE - they are source/sink)
+    let middle_commands = &commands[1..commands.len() - 1];
+    let output_records = apply_commands(input_records, middle_commands)?;
 
     let output_count = output_records.len();
 
-    // Format output
+    // Format output (CONSOLE writes to output)
     let output_text = output_records
         .iter()
         .map(|r| r.as_str().trim_end())
@@ -56,6 +83,8 @@ pub fn execute_pipeline(
 /// Parsed pipeline command.
 #[derive(Debug, Clone)]
 enum Command {
+    /// CONSOLE - Read from input or write to output
+    Console,
     /// FILTER pos,len = "value"
     FilterEq {
         pos: usize,
@@ -130,7 +159,9 @@ fn parse_commands(text: &str) -> Result<Vec<Command>, String> {
 fn parse_command(line: &str) -> Result<Command, String> {
     let upper = line.to_uppercase();
 
-    if upper.starts_with("FILTER") {
+    if upper == "CONSOLE" || upper.starts_with("CONSOLE ") {
+        Ok(Command::Console)
+    } else if upper.starts_with("FILTER") {
         parse_filter(line)
     } else if upper.starts_with("SELECT") {
         parse_select(line)
@@ -270,6 +301,10 @@ fn apply_commands(records: Vec<Record>, commands: &[Command]) -> Result<Vec<Reco
 /// Apply a single command to records.
 fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, String> {
     match cmd {
+        Command::Console => {
+            // Console in the middle of pipeline just passes through
+            Ok(records)
+        }
         Command::FilterEq { pos, len, value } => {
             let pos = *pos;
             let len = *len;
@@ -354,9 +389,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_console() {
+        let cmd = parse_command("CONSOLE").unwrap();
+        assert!(matches!(cmd, Command::Console));
+    }
+
+    #[test]
     fn test_execute_pipeline() {
         let input = "SMITH   JOHN      SALES     00050000\nJONES   MARY      ENGINEER  00075000";
-        let pipeline = r#"FILTER 18,10 = "SALES""#;
+        let pipeline = r#"PIPE CONSOLE
+| FILTER 18,10 = "SALES"
+| CONSOLE
+?"#;
 
         let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
 
@@ -364,5 +408,18 @@ mod tests {
         assert_eq!(output_count, 1);
         assert!(output.contains("SMITH"));
         assert!(!output.contains("JONES"));
+    }
+
+    #[test]
+    fn test_pipeline_requires_console() {
+        let input = "SMITH   JOHN      SALES     00050000";
+
+        // Missing starting CONSOLE
+        let result = execute_pipeline(input, r#"FILTER 18,10 = "SALES" | CONSOLE"#);
+        assert!(result.is_err());
+
+        // Missing ending CONSOLE
+        let result = execute_pipeline(input, r#"CONSOLE | FILTER 18,10 = "SALES""#);
+        assert!(result.is_err());
     }
 }

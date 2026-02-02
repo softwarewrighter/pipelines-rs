@@ -1,2 +1,5 @@
 # Filter for engineering staff only
-PIPE FILTER 18,10 = "ENGINEER"?
+PIPE CONSOLE
+| FILTER 18,10 = "ENGINEER"
+| CONSOLE
+?

@@ -1,3 +1,6 @@
 # Get first 5 records with name and department
-PIPE SELECT 0,8,0; 8,10,8; 18,10,18
-   | TAKE 5?
+PIPE CONSOLE
+| SELECT 0,8,0; 8,10,8; 18,10,18
+| TAKE 5
+| CONSOLE
+?

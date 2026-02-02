@@ -111,8 +111,10 @@ pub fn pipeline_panel(props: &PipelinePanelProps) -> Html {
                 <div class="dsl-help">
                     <details>
                         <summary>{ "DSL Reference" }</summary>
-                        <pre>{r#"PIPE <stage> | <stage>?  - Pipeline with stages, ? ends pipe
-   | <next-stage>          - Continue to next stage (on new line)
+                        <pre>{r#"PIPE CONSOLE             - Start: read from Input Records
+| <stage>                  - Apply transformation stage
+| CONSOLE                  - End: write to Output Records
+?                          - End of pipeline
 FILTER pos,len = "v"       - Keep matching records
 FILTER pos,len != "v"      - Omit matching records
 SELECT p,l,d; p,l,d        - Select fields (src,len,dest)
