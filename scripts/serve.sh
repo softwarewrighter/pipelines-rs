@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Serve the WASM UI on port 9952
+# Serve the WASM UI on port 9952 (from docs/ for GitHub Pages parity)
 
-cd "$(dirname "$0")/../wasm-ui/pkg"
+cd "$(dirname "$0")/../docs"
 
 echo "Serving pipelines-rs UI at http://localhost:9952"
 echo "Press Ctrl+C to stop"
