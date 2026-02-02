@@ -27,13 +27,14 @@ pub fn input_panel(props: &InputPanelProps) -> Html {
             </div>
             <div class="panel-content">
                 <div class="column-ruler">
-                    { "----+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----8" }
+                    { "0---------1---------2---------3---------4---------5---------6---------7---------" }
                 </div>
                 <textarea
                     class="record-input"
                     value={props.value.clone()}
                     oninput={on_input}
                     spellcheck="false"
+                    wrap="off"
                     rows="12"
                 />
             </div>
@@ -105,6 +106,7 @@ pub fn pipeline_panel(props: &PipelinePanelProps) -> Html {
                     value={props.value.clone()}
                     oninput={on_input}
                     spellcheck="false"
+                    wrap="off"
                     rows="8"
                     placeholder="Enter pipeline commands..."
                 />
@@ -148,7 +150,7 @@ pub fn output_panel(props: &OutputPanelProps) -> Html {
             </div>
             <div class="panel-content">
                 <div class="column-ruler">
-                    { "----+----1----+----2----+----3----+----4----+----5----+----6----+----7----+----8" }
+                    { "0---------1---------2---------3---------4---------5---------6---------7---------" }
                 </div>
                 if let Some(error) = &props.error {
                     <div class="error">
