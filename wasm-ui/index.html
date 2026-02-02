@@ -44,6 +44,16 @@
             border-bottom: 2px solid var(--highlight-color);
         }
 
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+        }
+
         .header h1 {
             font-size: 1.5rem;
             color: var(--header-color);
@@ -55,6 +65,52 @@
             color: var(--header-color);
         }
 
+        .tutorial-select {
+            background-color: var(--accent-color);
+            border: 1px solid var(--header-color);
+            border-radius: 4px;
+            color: var(--header-color);
+            font-family: var(--mono-font);
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+        }
+
+        .tutorial-select:hover {
+            background-color: var(--highlight-color);
+            color: white;
+        }
+
+        .tutorial-select:focus {
+            outline: none;
+            border-color: var(--highlight-color);
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-right: 1rem;
+        }
+
+        .speed-label {
+            color: var(--header-color);
+            font-size: 0.75rem;
+        }
+
+        .speed-slider {
+            width: 80px;
+            height: 4px;
+            cursor: pointer;
+            accent-color: var(--header-color);
+        }
+
+        .speed-value {
+            color: var(--header-color);
+            font-size: 0.75rem;
+            min-width: 2.5rem;
+        }
+
         .main {
             flex: 1;
             padding: 1rem;
@@ -64,7 +120,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 1rem;
-            height: calc(100vh - 150px);
+            height: calc(100vh - 200px);
         }
 
         @media (max-width: 1200px) {
@@ -128,7 +184,7 @@
             border-radius: 2px;
             margin-bottom: 0.5rem;
             white-space: pre;
-            min-width: max-content;
+            min-width: 0;
         }
 
         textarea {
@@ -144,7 +200,7 @@
             line-height: 1.5;
             white-space: pre;
             overflow: auto;
-            min-width: 82ch;
+            min-width: 0;
         }
 
         textarea:focus {
@@ -166,7 +222,7 @@
             line-height: 1.5;
             overflow: auto;
             white-space: pre;
-            min-width: 82ch;
+            min-width: 0;
             margin: 0;
         }
 
@@ -242,6 +298,294 @@
             font-size: 0.875rem;
             margin-top: 0.5rem;
             overflow-x: auto;
+        }
+
+        /* Modal overlay and dialog */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-dialog {
+            background-color: var(--panel-bg);
+            border: 2px solid var(--highlight-color);
+            border-radius: 8px;
+            max-width: 500px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-title {
+            background-color: var(--accent-color);
+            color: var(--header-color);
+            padding: 1rem;
+            margin: 0;
+            border-bottom: 1px solid var(--highlight-color);
+            border-radius: 6px 6px 0 0;
+            font-size: 1.25rem;
+        }
+
+        .modal-content {
+            padding: 1rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-description {
+            font-family: var(--mono-font);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-color);
+            white-space: pre-wrap;
+            margin: 0;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            padding: 1rem;
+            border-top: 1px solid var(--accent-color);
+        }
+
+        .modal-button {
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            font-family: var(--mono-font);
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: background-color 0.2s;
+        }
+
+        .modal-button.cancel {
+            background-color: var(--accent-color);
+            border: 1px solid var(--header-color);
+            color: var(--header-color);
+        }
+
+        .modal-button.cancel:hover {
+            background-color: #1a3a5c;
+        }
+
+        .modal-button.next {
+            background-color: var(--highlight-color);
+            border: none;
+            color: white;
+        }
+
+        .modal-button.next:hover {
+            background-color: #ff6b6b;
+        }
+
+        .next-button-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .modal-next-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 159, 28, 0.75);
+            color: var(--bg-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            z-index: 1001;
+        }
+
+        .modal-next-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px 6px 0 6px;
+            border-style: solid;
+            border-color: rgba(255, 159, 28, 0.75) transparent transparent transparent;
+        }
+
+        /* Animated countdown with cycling dots */
+        .countdown-anim {
+            display: inline-block;
+            position: relative;
+            font-family: var(--mono-font);
+            font-weight: 600;
+        }
+
+        .countdown-anim .frame {
+            position: absolute;
+            left: 0;
+            opacity: 0;
+        }
+
+        .countdown-anim .frame:first-child {
+            position: relative;
+        }
+
+        .countdown-anim .f0 { animation: frame0 1s infinite; }
+        .countdown-anim .f1 { animation: frame1 1s infinite; }
+        .countdown-anim .f2 { animation: frame2 1s infinite; }
+        .countdown-anim .f3 { animation: frame3 1s infinite; }
+
+        @keyframes frame0 {
+            0%, 24.9% { opacity: 1; }
+            25%, 100% { opacity: 0; }
+        }
+        @keyframes frame1 {
+            0%, 24.9% { opacity: 0; }
+            25%, 49.9% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+        @keyframes frame2 {
+            0%, 49.9% { opacity: 0; }
+            50%, 74.9% { opacity: 1; }
+            75%, 100% { opacity: 0; }
+        }
+        @keyframes frame3 {
+            0%, 74.9% { opacity: 0; }
+            75%, 100% { opacity: 1; }
+        }
+
+        /* Run button tooltip */
+        .run-button-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .run-tooltip {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            background-color: rgba(255, 159, 28, 0.75);
+            color: var(--bg-color);
+            padding: 1.25rem 1rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            width: 190px;
+            text-align: center;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .run-tooltip::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 20px;
+            border-width: 0 6px 6px 6px;
+            border-style: solid;
+            border-color: transparent transparent rgba(255, 159, 28, 0.75) transparent;
+        }
+
+        .tooltip-dismiss {
+            background: none;
+            border: none;
+            color: var(--bg-color);
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .tooltip-dismiss:hover {
+            color: var(--highlight-color);
+        }
+
+        /* Tutorial buttons in output panel */
+        .tutorial-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            margin-top: 0.5rem;
+        }
+
+        .next-tutorial-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tutorial-button {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-family: var(--mono-font);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .tutorial-button.next {
+            background-color: var(--success-color);
+            border: none;
+            color: white;
+        }
+
+        .tutorial-button.next:hover {
+            background-color: #00b85c;
+        }
+
+        .tutorial-button.cancel {
+            background-color: var(--accent-color);
+            border: 1px solid #666;
+            color: #bbb;
+        }
+
+        .tutorial-button.cancel:hover {
+            background-color: #1a3a5c;
+            color: white;
+        }
+
+        .next-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 159, 28, 0.75);
+            color: var(--bg-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .next-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px 6px 0 6px;
+            border-style: solid;
+            border-color: rgba(255, 159, 28, 0.75) transparent transparent transparent;
         }
 
         .footer {

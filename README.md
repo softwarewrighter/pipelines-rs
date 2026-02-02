@@ -77,13 +77,15 @@ fn main() {
 A browser-based demo is available using Yew/WASM:
 
 ```bash
-# Build library and WASM UI
+# Build library and WASM UI (ALWAYS use this script!)
 ./scripts/build.sh
 
 # Serve locally (port 9952)
 ./scripts/serve.sh
 # Then open http://localhost:9952
 ```
+
+**Important:** Always use `./scripts/build.sh` to build the WASM UI. Do not run `trunk` or `wasm-pack` commands directly - the build script handles compilation and deploys to the correct folder for serving.
 
 The UI provides:
 - **Input Panel** - Enter/edit 80-byte records with column ruler

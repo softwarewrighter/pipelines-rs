@@ -32,12 +32,25 @@ markdown-checker -f "**/*.md"
 # Run CLI demo
 cargo run
 
-# Build library + WASM UI
+# Build library + WASM UI (ALWAYS use this script!)
 ./scripts/build.sh
 
 # Serve web UI locally (port 9952)
 ./scripts/serve.sh
 ```
+
+## WASM UI Build Process
+
+**CRITICAL: Always use `./scripts/build.sh` to build the WASM UI.**
+
+- Do NOT run `trunk build`, `wasm-pack`, or other WASM commands directly
+- The build script compiles to `wasm-ui/dist/` then copies to `docs/` for serving
+- The local server (port 9952) serves from `docs/`
+- GitHub Pages also serves from `docs/`
+
+After making WASM UI changes:
+1. Run `./scripts/build.sh`
+2. Refresh browser (shift-reload if needed)
 
 ## Architecture
 

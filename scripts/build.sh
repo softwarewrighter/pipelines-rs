@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # Build pipelines-rs library and WASM UI
+# IMPORTANT: Always use this script to build - do not run trunk/wasm commands directly
 
 cd "$(dirname "$0")/.."
 
@@ -9,22 +10,18 @@ echo "Building Rust library..."
 cargo build
 
 echo ""
-echo "Building WASM UI..."
+echo "Building WASM UI with trunk..."
 cd wasm-ui
-wasm-pack build --target web --out-dir pkg
+trunk build
 
-# Copy index.html to pkg (for local development)
-cp index.html pkg/
-
-# Copy to docs/ for GitHub Pages
+# Copy dist/ to docs/ for GitHub Pages and local serving
 echo ""
 echo "Copying to docs/ for GitHub Pages..."
 cd ..
-cp wasm-ui/pkg/wasm_ui.js docs/
-cp wasm-ui/pkg/wasm_ui_bg.wasm docs/
-cp wasm-ui/index.html docs/
+rm -rf docs/*
+cp -r wasm-ui/dist/* docs/
 
 echo ""
 echo "Build complete!"
-echo "Run ./scripts/serve.sh to start the server"
+echo "Run ./scripts/serve.sh to start the server on port 9952"
 echo "GitHub Pages files are in ./docs/"

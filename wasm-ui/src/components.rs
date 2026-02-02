@@ -50,6 +50,14 @@ pub struct PipelinePanelProps {
     pub on_run: Callback<()>,
     pub on_load: Callback<web_sys::Event>,
     pub on_save: Callback<()>,
+    #[prop_or(false)]
+    pub show_run_tooltip: bool,
+    #[prop_or_default]
+    pub on_tooltip_dismiss: Callback<()>,
+    #[prop_or(false)]
+    pub auto_mode: bool,
+    #[prop_or(0)]
+    pub countdown: u32,
 }
 
 #[function_component(PipelinePanel)]
@@ -83,6 +91,13 @@ pub fn pipeline_panel(props: &PipelinePanelProps) -> Html {
         })
     };
 
+    let on_dismiss = {
+        let on_tooltip_dismiss = props.on_tooltip_dismiss.clone();
+        Callback::from(move |_| {
+            on_tooltip_dismiss.emit(());
+        })
+    };
+
     html! {
         <div class="panel pipeline-panel">
             <div class="panel-header">
@@ -95,9 +110,23 @@ pub fn pipeline_panel(props: &PipelinePanelProps) -> Html {
                     <button class="save-button" onclick={on_save_click}>
                         { "Save" }
                     </button>
-                    <button class="run-button" onclick={on_run_click}>
-                        { "Run" }
-                    </button>
+                    <div class="run-button-container">
+                        <button class="run-button" onclick={on_run_click}>
+                            { "Run" }
+                        </button>
+                        if props.show_run_tooltip {
+                            <div class="run-tooltip">
+                                if props.auto_mode {
+                                    { countdown_html(props.countdown, "Auto-run in ", "") }
+                                } else {
+                                    <>
+                                        <span>{ "Click Run to execute" }</span>
+                                        <button class="tooltip-dismiss" onclick={on_dismiss}>{ "\u{00D7}" }</button>
+                                    </>
+                                }
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
             <div class="panel-content">
@@ -136,10 +165,48 @@ pub struct OutputPanelProps {
     pub value: String,
     pub error: Option<String>,
     pub stats: String,
+    #[prop_or(false)]
+    pub show_tutorial_buttons: bool,
+    #[prop_or_default]
+    pub next_tutorial_name: Option<String>,
+    #[prop_or_default]
+    pub on_next_tutorial: Callback<()>,
+    #[prop_or_default]
+    pub on_cancel_tutorial: Callback<()>,
+    #[prop_or(false)]
+    pub auto_mode: bool,
+    #[prop_or(0)]
+    pub countdown: u32,
+}
+
+/// Render CSS-animated countdown with cycling dots.
+fn countdown_html(countdown: u32, prefix: &str, suffix: &str) -> Html {
+    html! {
+        <span class="countdown-anim">
+            <span class="frame f0">{ format!("{}...{}{}", prefix, countdown, suffix) }</span>
+            <span class="frame f1">{ format!("{}..{}.{}", prefix, countdown, suffix) }</span>
+            <span class="frame f2">{ format!("{}.{}..{}", prefix, countdown, suffix) }</span>
+            <span class="frame f3">{ format!("{}{}...{}", prefix, countdown, suffix) }</span>
+        </span>
+    }
 }
 
 #[function_component(OutputPanel)]
 pub fn output_panel(props: &OutputPanelProps) -> Html {
+    let on_next_click = {
+        let on_next_tutorial = props.on_next_tutorial.clone();
+        Callback::from(move |_| {
+            on_next_tutorial.emit(());
+        })
+    };
+
+    let on_cancel_click = {
+        let on_cancel_tutorial = props.on_cancel_tutorial.clone();
+        Callback::from(move |_| {
+            on_cancel_tutorial.emit(());
+        })
+    };
+
     html! {
         <div class="panel output-panel">
             <div class="panel-header">
@@ -158,6 +225,27 @@ pub fn output_panel(props: &OutputPanelProps) -> Html {
                     </div>
                 } else {
                     <pre class="record-output">{ &props.value }</pre>
+                }
+                if props.show_tutorial_buttons {
+                    <div class="tutorial-buttons">
+                        <div class="next-tutorial-container">
+                            <button class="tutorial-button next" onclick={on_next_click}>
+                                { "Next Tutorial" }
+                            </button>
+                            if let Some(next_name) = &props.next_tutorial_name {
+                                <div class="next-tooltip">
+                                    if props.auto_mode {
+                                        { countdown_html(props.countdown, &format!("Next: {} in ", next_name), "") }
+                                    } else {
+                                        { format!("Next: {}", next_name) }
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <button class="tutorial-button cancel" onclick={on_cancel_click}>
+                            { "Cancel" }
+                        </button>
+                    </div>
                 }
             </div>
         </div>
