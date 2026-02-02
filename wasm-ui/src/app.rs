@@ -477,7 +477,7 @@ pub fn app() -> Html {
     };
 
     // Auto-mode timer: uses Timeout that re-schedules via state changes
-    // Each time countdown changes, a new timeout is scheduled
+    // Each time countdown or tutorial_delay changes, a new timeout is scheduled
     {
         let state = state.clone();
         let on_run = on_run.clone();
@@ -488,8 +488,9 @@ pub fn app() -> Html {
         let tutorial_delay = state.tutorial_delay;
 
         use_effect_with(
-            (auto_mode, phase.clone(), countdown),
-            move |(auto_mode, phase, countdown)| {
+            (auto_mode, phase.clone(), countdown, tutorial_delay),
+            move |(auto_mode, phase, countdown, tutorial_delay)| {
+                let tutorial_delay = *tutorial_delay;
                 let timeout_handle: Rc<RefCell<Option<Timeout>>> = Rc::new(RefCell::new(None));
 
                 if *auto_mode && *phase != TutorialPhase::None {
