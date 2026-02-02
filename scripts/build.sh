@@ -12,7 +12,7 @@ cargo build
 echo ""
 echo "Building WASM UI with trunk..."
 cd wasm-ui
-trunk build
+trunk build --public-url /pipelines-rs/
 
 # Copy dist/ to docs/ for GitHub Pages and local serving
 echo ""
