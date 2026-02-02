@@ -62,18 +62,73 @@ This document outlines the implementation plan for pipelines-rs, broken into mil
 
 ---
 
-## Next Steps
+## Next Major Feature (Deferred)
 
-### Immediate (High Priority)
+### Milestone 3: Multi-Stream Processing
 
-#### Labels and Multiple Streams
+This milestone enables routing records to different subpipes based on selectors, with each subpipe potentially writing to different output files. This is the core feature that enables real mainframe-style batch processing patterns like master file updates.
 
-Add support for labeled stages and stream branching:
+#### Overview
+
+Records from an input source can be routed to different processing paths based on field values:
 
 ```
 PIPE CONSOLE
-| a: FILTER 18,10 = "SALES"
-| b: SELECT 0,8,0; 28,8,8
+| a: SPLIT 18,10                    # Split on department field
+|    = "SALES": sales_pipe          # Route SALES to subpipe
+|    = "ENGINEER": eng_pipe         # Route ENGINEER to subpipe
+|    OTHERWISE: other_pipe          # Route unmatched records
+?
+
+# Subpipe definitions
+sales_pipe:
+| SELECT 0,8,0; 28,8,8
+| FILE sales-report.out
+?
+
+eng_pipe:
+| UPPER
+| FILE engineers.out
+?
+
+other_pipe:
+| FILE unmatched.out
+?
+```
+
+#### Prerequisites: Debugging Controls
+
+To implement and test multi-stream processing, we first need pipeline debugging controls:
+
+**Stage Inspection**:
+- [ ] Add stage-by-stage execution mode (step through pipeline)
+- [ ] Show intermediate results between stages
+- [ ] Track and display record counts at each stage
+- [ ] Highlight current stage in pipeline editor
+
+**Pipeline Controls**:
+- [ ] Reset pipeline to initial state
+- [ ] Step forward one stage
+- [ ] Run to completion
+- [ ] Add breakpoints (pause at specific stage)
+
+**Inspector Panel UI**:
+```
+[Input: 8 records]
+    ↓
+[a: SPLIT] ─┬─> [sales_pipe: 3 records]
+            ├─> [eng_pipe: 3 records]
+            └─> [other_pipe: 2 records]
+```
+
+#### Labels for Stages
+
+Add label syntax for referencing stages:
+
+```
+PIPE CONSOLE
+| a: FILTER 18,10 = "SALES"    # Label 'a' for this stage
+| b: SELECT 0,8,0; 28,8,8      # Label 'b' for this stage
 | CONSOLE
 ?
 ```
@@ -81,49 +136,95 @@ PIPE CONSOLE
 **Tasks**:
 - [ ] Add label syntax (`label:` prefix) to DSL parser
 - [ ] Store labels in parsed Command struct
-- [ ] Display labels in UI (for debugging)
+- [ ] Display labels in UI debug panel
+- [ ] Use labels for SPLIT routing targets
 
-#### SPLIT Stage
+#### SPLIT Stage (Conditional Routing)
 
-Route records to different outputs based on conditions:
+Route records to different subpipes based on field matching:
 
 ```
 PIPE CONSOLE
-| SPLIT 18,10
-|   = "SALES": sales_output
-|   = "ENGINEER": eng_output
-|   OTHERWISE: other_output
+| SPLIT 18,10                      # Field to match
+|   = "SALES": sales_handler       # Exact match
+|   = "ENGINEER": eng_handler      # Exact match
+|   CONTAINS "MARK": marketing     # Partial match
+|   OTHERWISE: default_handler     # Catch-all
 ?
 ```
 
 **Tasks**:
-- [ ] Design SPLIT syntax
-- [ ] Implement SPLIT stage in DSL
-- [ ] Add multi-output support to pipeline executor
-- [ ] Update UI to show split outputs
+- [ ] Design SPLIT syntax (field spec + routing rules)
+- [ ] Implement SPLIT stage in DSL parser
+- [ ] Add subpipe definition syntax
+- [ ] Implement multi-output pipeline executor
+- [ ] Route records to appropriate subpipes
+- [ ] Update UI to show split outputs in separate panels
 
-#### MERGE Stage
+#### File I/O for Subpipes
 
-Combine multiple sorted streams:
+Each subpipe can read from and write to files:
 
 ```
-PIPE (
-  CONSOLE | SORT 0,8
-  ?
-  FILE sales.dat | SORT 0,8
-)
-| MERGE 0,8
-| CONSOLE
+PIPE FILE master.dat              # Read from file
+| SPLIT 0,1                       # Route by record type
+|   = "U": update_pipe            # Updates
+|   = "D": delete_pipe            # Deletes
+|   = "A": add_pipe               # Additions
+?
+
+update_pipe:
+| LOOKUP master-index.dat 0,8     # Find matching master
+| MERGE                           # Merge update into master
+| FILE master-new.dat             # Write updated master
 ?
 ```
 
 **Tasks**:
-- [ ] Design MERGE syntax
-- [ ] Implement sorted merge algorithm
-- [ ] Add multi-input pipeline support
-- [ ] Consider memory-efficient streaming merge
+- [ ] Add FILE stage for reading (line-by-line)
+- [ ] Add FILE stage for writing (append or overwrite)
+- [ ] Handle file errors gracefully
+- [ ] Support relative and absolute paths
+- [ ] Support multiple output files from one pipeline
 
-#### SORT Stage
+#### Advanced Demo: Master File Update
+
+Classic mainframe pattern - apply transactions to a master file:
+
+```
+# Transaction file has: A=Add, U=Update, D=Delete records
+# Master file has existing employee records
+
+PIPE FILE transactions.dat
+| SPLIT 0,1
+|   = "A": add_new
+|   = "U": update_existing
+|   = "D": mark_deleted
+?
+
+add_new:
+| SKIP 1                          # Skip transaction code
+| FILE master-adds.dat
+?
+
+update_existing:
+| LOOKUP master.dat 1,8           # Match on employee ID
+| SELECT ...                      # Merge fields
+| FILE master-updates.dat
+?
+```
+
+**Tasks**:
+- [ ] Implement LOOKUP stage (key-based record matching)
+- [ ] Create transaction file test data
+- [ ] Create master file update demo
+- [ ] Document master file update pattern
+
+---
+
+## Backlog (Lower Priority)
+
+### SORT Stage
 
 Sort records by field:
 
@@ -140,82 +241,35 @@ PIPE CONSOLE
 - [ ] Support multiple sort keys
 - [ ] Consider external sort for large datasets
 
----
+### MERGE Stage
 
-### Short Term (Medium Priority)
-
-#### Debugging Controls
-
-Add ability to inspect data at each stage:
-
-**Tasks**:
-- [ ] Add stage-by-stage execution mode
-- [ ] Show intermediate results between stages
-- [ ] Add record count at each stage
-- [ ] Highlight current stage in pipeline editor
-- [ ] Add breakpoints (pause at specific stage)
-
-#### Stage Inspector Panel
-
-New UI panel showing data flow:
+Combine multiple sorted streams:
 
 ```
-[Input: 8 records]
-    ↓
-[FILTER: 3 records passed, 5 filtered]
-    ↓
-[SELECT: 3 records transformed]
-    ↓
-[Output: 3 records]
-```
-
-**Tasks**:
-- [ ] Design inspector panel layout
-- [ ] Track record counts per stage
-- [ ] Show sample records at each stage
-- [ ] Add expand/collapse for stage details
-
-#### Additional FILTER Operators
-
-Extend FILTER with more comparison options:
-
-```
-FILTER 28,8 > "00050000"     # Greater than
-FILTER 28,8 < "00070000"     # Less than
-FILTER 28,8 >= "00050000"    # Greater or equal
-FILTER 28,8 <= "00070000"    # Less or equal
-FILTER 0,8 CONTAINS "SMI"    # Contains substring
-FILTER 0,8 STARTSWITH "S"    # Starts with
-```
-
-**Tasks**:
-- [ ] Add numeric comparison operators
-- [ ] Add string operators (CONTAINS, STARTSWITH, ENDSWITH)
-- [ ] Update DSL parser
-- [ ] Add tests for new operators
-
----
-
-### Medium Term (Lower Priority)
-
-#### File I/O Stages
-
-Add file-based sources and sinks:
-
-```
-PIPE FILE input.dat
-| FILTER 18,10 = "SALES"
-| FILE output.dat
+PIPE (
+  FILE sales.dat | SORT 0,8
+  FILE marketing.dat | SORT 0,8
+)
+| MERGE 0,8
+| CONSOLE
 ?
 ```
 
 **Tasks**:
-- [ ] Add FILE stage for reading
-- [ ] Add FILE stage for writing
-- [ ] Handle file errors gracefully
-- [ ] Support relative and absolute paths
+- [ ] Design MERGE syntax for multiple inputs
+- [ ] Implement sorted merge algorithm
+- [ ] Consider memory-efficient streaming merge
 
-#### REFORMAT Stage
+### Additional FILTER Operators
+
+```
+FILTER 28,8 > "00050000"     # Greater than
+FILTER 28,8 < "00070000"     # Less than
+FILTER 0,8 CONTAINS "SMI"    # Contains substring
+FILTER 0,8 STARTSWITH "S"    # Starts with
+```
+
+### REFORMAT Stage
 
 Create new records with literal text and field references:
 
@@ -226,64 +280,33 @@ PIPE CONSOLE
 ?
 ```
 
-**Tasks**:
-- [ ] Design REFORMAT syntax
-- [ ] Implement string concatenation with field refs
-- [ ] Support escape sequences
-- [ ] Add padding/alignment options
-
-#### COUNT and STATS Stages
-
-Aggregate operations:
-
-```
-PIPE CONSOLE
-| COUNT                     # Output: record count
-?
-
-PIPE CONSOLE
-| STATS 28,8                # Output: min, max, sum, avg
-?
-```
-
-**Tasks**:
-- [ ] Implement COUNT stage
-- [ ] Implement STATS stage for numeric fields
-- [ ] Consider GROUP BY functionality
-
-#### Keyboard Shortcuts
-
-Improve UI productivity:
+### Keyboard Shortcuts
 
 - [ ] Ctrl+Enter to run pipeline
 - [ ] Ctrl+S to save pipeline
-- [ ] Ctrl+O to load pipeline
 - [ ] F5 to run, F6 to step
+
+### CI/CD Pipeline
+
+- [ ] GitHub Actions workflow
+- [ ] Automated testing on PR
+- [ ] Deploy to GitHub Pages on merge
 
 ---
 
-### Long Term (Future Consideration)
+## Long Term (Future Consideration)
 
 #### Parallel Execution
 
-Process records in parallel for performance:
-
 - [ ] Design parallel execution model
 - [ ] Implement parallel filter/map stages
-- [ ] Add thread pool configuration
-- [ ] Measure and optimize performance
 
 #### External Data Sources
 
-Connect to databases and APIs:
-
 - [ ] Database source (SQL query)
 - [ ] HTTP/REST source
-- [ ] Message queue integration
 
 #### Pipeline Composition
-
-Reusable pipeline fragments:
 
 ```
 INCLUDE common-filters.pipe
@@ -295,11 +318,8 @@ PIPE CONSOLE
 
 #### Visual Pipeline Editor
 
-Drag-and-drop pipeline construction:
-
 - [ ] Node-based visual editor
 - [ ] Generate DSL from visual layout
-- [ ] Parse DSL to visual layout
 
 ---
 
@@ -312,21 +332,30 @@ Drag-and-drop pipeline construction:
 | CLI binary | Complete | `pipe-run` command |
 | Demo scripts | Complete | 24 scripts in `demos/` |
 | Tutorial system | Complete | Auto-run mode with countdown |
-| Labels | Not Started | High priority |
-| SPLIT stage | Not Started | High priority |
-| Debug controls | Not Started | Medium priority |
+
+### Next Sprint (Deferred)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Debug controls | Not Started | Prerequisite for SPLIT |
+| Stage inspector | Not Started | UI for debugging |
+| Labels | Not Started | Required for SPLIT targets |
+| SPLIT stage | Not Started | Core routing feature |
+| File I/O | Not Started | Required for subpipe outputs |
 
 ### Backlog (Prioritized)
 
-1. Labels for stages
-2. SPLIT stage (conditional routing)
-3. MERGE stage (combine streams)
-4. SORT stage
-5. Debug inspector panel
-6. Additional FILTER operators
-7. REFORMAT stage with field refs
-8. Keyboard shortcuts
-9. CI/CD pipeline
+1. **Debugging controls** (reset, step, inspect)
+2. **Labels for stages** (reference targets)
+3. **SPLIT stage** (conditional routing to subpipes)
+4. **File I/O stages** (read/write files)
+5. SORT stage
+6. MERGE stage (combine streams)
+7. LOOKUP stage (key-based matching)
+8. Additional FILTER operators
+9. REFORMAT stage
+10. Keyboard shortcuts
+11. CI/CD pipeline
 
 ---
 
