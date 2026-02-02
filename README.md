@@ -60,6 +60,7 @@ fn main() {
 
 | Document | Description |
 |----------|-------------|
+| [User Manual](docs/user-manual.md) | Usage guide with examples |
 | [Architecture](docs/architecture.md) | System design and component overview |
 | [PRD](docs/prd.md) | Product requirements and goals |
 | [Design](docs/design.md) | Technical design decisions |
