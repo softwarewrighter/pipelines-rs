@@ -85,7 +85,7 @@ A browser-based demo is available using Yew/WASM:
 # Then open http://localhost:9952
 ```
 
-**Important:** Always use `./scripts/build.sh` to build the WASM UI. Do not run `trunk` or `wasm-pack` commands directly - the build script handles compilation and deploys to the correct folder for serving.
+**Important:** Always use `./scripts/build.sh` to build the WASM UI. Do not run `trunk` or `wasm-pack` commands directly - the build script handles compilation and deploys to the correct folder for serving. After rebuilding, just refresh your browser - no server restart needed.
 
 The UI provides:
 - **Input Panel** - Enter/edit 80-byte records with column ruler

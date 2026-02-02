@@ -45,12 +45,13 @@ cargo run
 
 - Do NOT run `trunk build`, `wasm-pack`, or other WASM commands directly
 - The build script compiles to `wasm-ui/dist/` then copies to `docs/` for serving
-- The local server (port 9952) serves from `docs/`
+- The local server (port 9952) serves from `docs/` via symlink
 - GitHub Pages also serves from `docs/`
 
 After making WASM UI changes:
 1. Run `./scripts/build.sh`
 2. Refresh browser (shift-reload if needed)
+3. **No server restart needed** - the server serves via symlink to `docs/`
 
 ## Architecture
 
