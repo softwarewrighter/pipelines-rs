@@ -25,6 +25,7 @@
 //! - `LOCATE pos,len "pattern"` - Keep records where field contains pattern
 //! - `NLOCATE "pattern"` - Keep records NOT containing pattern
 //! - `COUNT` - Count records and emit summary (e.g., "COUNT=42")
+//! - `CHANGE "old" "new"` - Replace occurrences of old with new (sed-like)
 //! - Lines starting with `#` are comments
 
 use pipelines_rs::{Pipeline, Record};
@@ -121,6 +122,8 @@ enum Command {
     },
     /// COUNT - count records and emit summary
     Count,
+    /// CHANGE "old" "new" - replace occurrences
+    Change { old: String, new: String },
 }
 
 /// Parse DSL text into commands.
@@ -190,6 +193,8 @@ fn parse_command(line: &str) -> Result<Command, String> {
         parse_locate(line)
     } else if upper == "COUNT" || upper.starts_with("COUNT ") {
         Ok(Command::Count)
+    } else if upper.starts_with("CHANGE") {
+        parse_change(line)
     } else {
         Err(format!(
             "Unknown command: {}",
@@ -399,6 +404,43 @@ fn parse_nlocate(line: &str) -> Result<Command, String> {
     }
 }
 
+/// Parse CHANGE command.
+/// Format: CHANGE "old" "new" or CHANGE /old/ /new/
+fn parse_change(line: &str) -> Result<Command, String> {
+    let rest = line[6..].trim(); // Skip "CHANGE"
+
+    // Find the two quoted strings
+    // First, find the delimiter (either " or /)
+    let delim = if rest.starts_with('"') {
+        '"'
+    } else if rest.starts_with('/') {
+        '/'
+    } else {
+        return Err("CHANGE requires two quoted strings".to_string());
+    };
+
+    // Parse first quoted string
+    let after_first_delim = &rest[1..];
+    let end_first = after_first_delim
+        .find(delim)
+        .ok_or("CHANGE: unclosed first string")?;
+    let old = after_first_delim[..end_first].to_string();
+
+    // Find second quoted string
+    let after_first = after_first_delim[end_first + 1..].trim();
+    if !after_first.starts_with(delim) {
+        return Err("CHANGE requires two quoted strings".to_string());
+    }
+
+    let after_second_delim = &after_first[1..];
+    let end_second = after_second_delim
+        .find(delim)
+        .ok_or("CHANGE: unclosed second string")?;
+    let new = after_second_delim[..end_second].to_string();
+
+    Ok(Command::Change { old, new })
+}
+
 /// Apply commands to records.
 fn apply_commands(records: Vec<Record>, commands: &[Command]) -> Result<Vec<Record>, String> {
     // We need to collect and re-create pipeline for each command
@@ -479,6 +521,17 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
             let count = records.len();
             let summary = format!("COUNT={count}");
             Ok(vec![Record::from_str(&summary)])
+        }
+        Command::Change { old, new } => {
+            // Replace all occurrences of old with new in each record
+            let old = old.clone();
+            let new = new.clone();
+            Ok(Pipeline::new(records.into_iter())
+                .map(move |r| {
+                    let content = r.as_str().replace(&old, &new);
+                    Record::from_str(&content)
+                })
+                .collect())
         }
     }
 }
@@ -715,5 +768,66 @@ DOE     JANE      SALES     00060000";
         assert_eq!(input_count, 3);
         assert_eq!(output_count, 1);
         assert_eq!(output, "COUNT=2");
+    }
+
+    #[test]
+    fn test_parse_change() {
+        let cmd = parse_command(r#"CHANGE "SALES" "MARKETING""#).unwrap();
+        match cmd {
+            Command::Change { old, new } => {
+                assert_eq!(old, "SALES");
+                assert_eq!(new, "MARKETING");
+            }
+            _ => panic!("Expected Change"),
+        }
+    }
+
+    #[test]
+    fn test_parse_change_slash_delimiters() {
+        let cmd = parse_command(r#"CHANGE /old/ /new/"#).unwrap();
+        match cmd {
+            Command::Change { old, new } => {
+                assert_eq!(old, "old");
+                assert_eq!(new, "new");
+            }
+            _ => panic!("Expected Change"),
+        }
+    }
+
+    #[test]
+    fn test_execute_change() {
+        let input = "SMITH   JOHN      SALES     00050000
+JONES   MARY      ENGINEER  00075000
+DOE     JANE      SALES     00060000";
+        let pipeline = r#"PIPE CONSOLE
+| CHANGE "SALES" "MKTG"
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 3);
+        assert!(output.contains("MKTG"));
+        assert!(!output.contains("SALES"));
+        // ENGINEER should be unchanged
+        assert!(output.contains("ENGINEER"));
+    }
+
+    #[test]
+    fn test_execute_change_to_empty() {
+        let input = "ERROR: Something went wrong
+INFO: All is well
+ERROR: Another problem";
+        let pipeline = r#"PIPE CONSOLE
+| CHANGE "ERROR: " ""
+| CONSOLE
+?"#;
+
+        let (output, _input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(output_count, 3);
+        assert!(output.contains("Something went wrong"));
+        assert!(!output.contains("ERROR:"));
     }
 }
