@@ -24,6 +24,7 @@
 //! - `LOCATE "pattern"` - Keep records containing pattern (grep-like)
 //! - `LOCATE pos,len "pattern"` - Keep records where field contains pattern
 //! - `NLOCATE "pattern"` - Keep records NOT containing pattern
+//! - `COUNT` - Count records and emit summary (e.g., "COUNT=42")
 //! - Lines starting with `#` are comments
 
 use pipelines_rs::{Pipeline, Record};
@@ -118,6 +119,8 @@ enum Command {
         /// Optional field restriction (pos, len)
         field: Option<(usize, usize)>,
     },
+    /// COUNT - count records and emit summary
+    Count,
 }
 
 /// Parse DSL text into commands.
@@ -185,6 +188,8 @@ fn parse_command(line: &str) -> Result<Command, String> {
         parse_nlocate(line)
     } else if upper.starts_with("LOCATE") {
         parse_locate(line)
+    } else if upper == "COUNT" || upper.starts_with("COUNT ") {
+        Ok(Command::Count)
     } else {
         Err(format!(
             "Unknown command: {}",
@@ -469,6 +474,12 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
                     .collect()),
             }
         }
+        Command::Count => {
+            // Count records and emit a single summary record
+            let count = records.len();
+            let summary = format!("COUNT={count}");
+            Ok(vec![Record::from_str(&summary)])
+        }
     }
 }
 
@@ -663,5 +674,46 @@ DOE     JANE      SALES     00060000";
         assert!(!output.contains("SMITH"));
         assert!(output.contains("JONES"));
         assert!(!output.contains("DOE"));
+    }
+
+    #[test]
+    fn test_parse_count() {
+        let cmd = parse_command("COUNT").unwrap();
+        assert!(matches!(cmd, Command::Count));
+    }
+
+    #[test]
+    fn test_execute_count() {
+        let input = "SMITH   JOHN      SALES     00050000
+JONES   MARY      ENGINEER  00075000
+DOE     JANE      SALES     00060000";
+        let pipeline = r#"PIPE CONSOLE
+| COUNT
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 1);
+        assert_eq!(output, "COUNT=3");
+    }
+
+    #[test]
+    fn test_execute_count_after_filter() {
+        let input = "SMITH   JOHN      SALES     00050000
+JONES   MARY      ENGINEER  00075000
+DOE     JANE      SALES     00060000";
+        let pipeline = r#"PIPE CONSOLE
+| LOCATE "SALES"
+| COUNT
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 1);
+        assert_eq!(output, "COUNT=2");
     }
 }
