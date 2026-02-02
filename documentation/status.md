@@ -4,24 +4,36 @@
 
 **Project**: pipelines-rs
 **Version**: 0.1.0 (pre-release)
-**Last Updated**: 2026-02-01
+**Last Updated**: 2026-02-02
 
 ### Overall Progress
 
 | Milestone | Status | Progress |
 |-----------|--------|----------|
 | M1: Core Pipeline | Complete | 100% |
-| M2: File I/O | Not Started | 0% |
-| M3: CLI Interface | Not Started | 0% |
+| M2: File I/O | Complete | 100% |
+| M3: CLI Interface | Complete | 100% |
 | M4: Advanced Features | Not Started | 0% |
 | M5: Polish and Release | Not Started | 0% |
 
 ### Current Phase
 
-**Phase**: Core Pipeline Complete
-**Focus**: Mainframe-style 80-byte record processing
+**Phase**: CLI and Web UI Complete
+**Focus**: Demo scripts and pipeline execution
 
 ## Recent Activity
+
+### 2026-02-02
+
+- [x] Implemented interactive tutorial system with auto-run mode
+- [x] Added Clear button and output clearing between tutorials
+- [x] Created DSL module in main library (moved from wasm-ui)
+- [x] Implemented `pipe-run` CLI binary for running .pipe files
+- [x] Created 23 demo scripts in `demos/` directory
+- [x] Created `demo-all.sh` to run all demos
+- [x] Sample outputs go to `work/sample-pipe-outputs/`
+- [x] Added input data file `specs/input-fixed-80.data`
+- [x] Added serve.sh redirect for localhost:9952 root
 
 ### 2026-02-01
 
@@ -48,15 +60,18 @@
 - **Pipeline**: Fluent API for chaining operations
 - **Stages**: Filter, Select, Reformat, Map, Inspect
 - **Operations**: filter, omit, map, select, reformat, take, skip, chain, fold, any, all
-- **CLI Demo**: Working mainframe-style batch processing demonstration
+- **CLI**: `pipe-run` binary for running .pipe files
+- **Demo scripts**: 24 demo scripts in `demos/` directory
 - **Web UI**: Yew/WASM interface at http://localhost:9952
-- **DSL Parser**: Text-based pipeline commands (FILTER, SELECT, TAKE, SKIP)
+- **Tutorial system**: Interactive tutorials with auto-run mode
+- **DSL Parser**: Text-based pipeline commands (FILTER, SELECT, TAKE, SKIP, LOCATE, NLOCATE, COUNT, CHANGE, LITERAL, UPPER, LOWER, REVERSE, DUPLICATE)
+- **Live demo**: https://softwarewrighter.github.io/pipelines-rs/
 
 ## What's Not Working
 
-- File I/O (planned for M2)
-- CLI interface (planned for M3)
 - Full merge/split with sorting (planned for M4)
+- Labels for stages
+- SORT stage
 
 ## Blockers
 
@@ -66,20 +81,20 @@ None currently.
 
 ### Immediate (This Week)
 
-1. [ ] Add file reader source (line-by-line)
-2. [ ] Add file writer sink
-3. [ ] Add Sort stage
+1. [ ] Add labels for stages
+2. [ ] Add SORT stage
+3. [ ] Set up CI/CD with GitHub Actions
 
 ### Short Term (This Month)
 
-1. [ ] Complete Milestone 2 (File I/O)
-2. [ ] Set up CI/CD with GitHub Actions
-3. [ ] Add proper Merge stage (sorted merge)
+1. [ ] Add proper Merge stage (sorted merge)
+2. [ ] Add Split stage (multi-output)
+3. [ ] Debug inspector panel
 
 ### Medium Term (Next Quarter)
 
-1. [ ] Complete Milestone 3 (CLI)
-2. [ ] Add Split stage (multi-output)
+1. [ ] Additional FILTER operators (>, <, CONTAINS)
+2. [ ] Keyboard shortcuts
 3. [ ] Initial user feedback
 
 ## Metrics

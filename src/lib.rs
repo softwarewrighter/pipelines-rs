@@ -33,11 +33,13 @@
 //! assert_eq!(result.len(), 2);
 //! ```
 
+pub mod dsl;
 pub mod error;
 pub mod pipeline;
 pub mod record;
 pub mod stage;
 
+pub use dsl::execute_pipeline;
 pub use error::PipelineError;
 pub use pipeline::{Pipeline, from_lines, from_strings};
 pub use record::{RECORD_WIDTH, Record};

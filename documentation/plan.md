@@ -6,8 +6,8 @@ This document outlines the implementation plan for pipelines-rs, broken into mil
 
 ## Current Phase
 
-**Phase**: Core Pipeline Complete
-**Status**: Web UI functional with basic stages
+**Phase**: CLI and Web UI Complete
+**Status**: CLI, demos, and tutorial system functional
 
 ## Completed Work
 
@@ -34,12 +34,31 @@ This document outlines the implementation plan for pipelines-rs, broken into mil
   - [x] DSL parser for pipeline text
   - [x] Load/Save pipeline files
   - [x] 80-column display with ruler
+  - [x] Interactive tutorial system with auto-run mode
+  - [x] Clear button for output panel
 - [x] Tests
   - [x] 59 tests (33 unit + 26 doc tests)
   - [x] Zero clippy warnings
 - [x] Documentation
   - [x] API documentation
   - [x] User manual with examples
+
+### Milestone 2: CLI Interface - COMPLETE
+
+- [x] DSL module in main library
+  - [x] `execute_pipeline()` function exposed
+  - [x] Full DSL parser (FILTER, SELECT, TAKE, SKIP, LOCATE, COUNT, etc.)
+- [x] `pipe-run` CLI binary
+  - [x] Run .pipe files against input data
+  - [x] Output to file or stdout
+  - [x] Record count statistics
+- [x] Demo scripts
+  - [x] Individual `demo-<name>.sh` for each .pipe file
+  - [x] `demo-all.sh` to run all demos
+  - [x] Outputs to `work/sample-pipe-outputs/`
+- [x] Sample data
+  - [x] `specs/input-fixed-80.data` with 8 employee records
+  - [x] 23 sample .pipe files in `specs/`
 
 ---
 
@@ -290,8 +309,9 @@ Drag-and-drop pipeline construction:
 
 | Task | Status | Notes |
 |------|--------|-------|
-| User manual | Complete | With examples |
-| Plan update | Complete | Next steps defined |
+| CLI binary | Complete | `pipe-run` command |
+| Demo scripts | Complete | 24 scripts in `demos/` |
+| Tutorial system | Complete | Auto-run mode with countdown |
 | Labels | Not Started | High priority |
 | SPLIT stage | Not Started | High priority |
 | Debug controls | Not Started | Medium priority |
@@ -304,10 +324,9 @@ Drag-and-drop pipeline construction:
 4. SORT stage
 5. Debug inspector panel
 6. Additional FILTER operators
-7. File I/O stages
-8. REFORMAT stage
-9. COUNT/STATS stages
-10. Keyboard shortcuts
+7. REFORMAT stage with field refs
+8. Keyboard shortcuts
+9. CI/CD pipeline
 
 ---
 
