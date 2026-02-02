@@ -177,6 +177,8 @@ pub struct OutputPanelProps {
     pub auto_mode: bool,
     #[prop_or(0)]
     pub countdown: u32,
+    #[prop_or_default]
+    pub on_clear: Callback<()>,
 }
 
 /// Render CSS-animated countdown with cycling dots.
@@ -207,13 +209,25 @@ pub fn output_panel(props: &OutputPanelProps) -> Html {
         })
     };
 
+    let on_clear_click = {
+        let on_clear = props.on_clear.clone();
+        Callback::from(move |_: web_sys::MouseEvent| {
+            on_clear.emit(());
+        })
+    };
+
     html! {
         <div class="panel output-panel">
             <div class="panel-header">
                 <h2>{ "Output Records" }</h2>
-                if !props.stats.is_empty() {
-                    <span class="stats">{ &props.stats }</span>
-                }
+                <div class="header-right-group">
+                    if !props.stats.is_empty() {
+                        <span class="stats">{ &props.stats }</span>
+                    }
+                    <button class="clear-button" onclick={on_clear_click}>
+                        { "Clear" }
+                    </button>
+                </div>
             </div>
             <div class="panel-content">
                 <div class="column-ruler">

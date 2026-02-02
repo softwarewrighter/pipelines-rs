@@ -429,6 +429,10 @@ pub fn app() -> Html {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
+            // Clear output when advancing to next tutorial
+            new_state.output_text.clear();
+            new_state.error = None;
+            new_state.stats.clear();
             if let Some(idx) = new_state.tutorial_step {
                 let next_idx = idx + 1;
                 if next_idx < TUTORIALS.len() {
@@ -444,6 +448,18 @@ pub fn app() -> Html {
                     new_state.auto_mode = false;
                 }
             }
+            state.set(new_state);
+        })
+    };
+
+    // Clear output button
+    let on_clear = {
+        let state = state.clone();
+        Callback::from(move |_: ()| {
+            let mut new_state = (*state).clone();
+            new_state.output_text.clear();
+            new_state.error = None;
+            new_state.stats.clear();
             state.set(new_state);
         })
     };
@@ -509,7 +525,10 @@ pub fn app() -> Html {
                                     on_run.emit(());
                                 }
                                 TutorialPhase::ShowingOutputButtons => {
-                                    // Advance to next tutorial
+                                    // Clear output and advance to next tutorial
+                                    new_state.output_text.clear();
+                                    new_state.error = None;
+                                    new_state.stats.clear();
                                     if let Some(idx) = tutorial_step {
                                         let next_idx = idx + 1;
                                         if next_idx < TUTORIALS.len() {
@@ -614,6 +633,7 @@ pub fn app() -> Html {
                         on_cancel_tutorial={on_tutorial_cancel.clone()}
                         auto_mode={state.auto_mode}
                         countdown={state.countdown}
+                        on_clear={on_clear}
                     />
                 </div>
             </main>

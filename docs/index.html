@@ -167,6 +167,29 @@
             color: #bbb;
         }
 
+        .header-right-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .clear-button {
+            background-color: var(--accent-color);
+            border: 1px solid var(--header-color);
+            border-radius: 4px;
+            color: var(--header-color);
+            font-family: var(--mono-font);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .clear-button:hover {
+            background-color: var(--highlight-color);
+            color: white;
+        }
+
         .panel-content {
             flex: 1;
             padding: 0.5rem;
@@ -635,7 +658,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="modulepreload" href="/pipelines-rs/wasm-ui-98b9e2ab5debac9e.js" crossorigin="anonymous" integrity="sha384-OHM8K0fppmlxcAin5nMYWT7fNaGm1xVGkkDAkpl5qS9uFCCAH98F1u3annRiFRk5"><link rel="preload" href="/pipelines-rs/wasm-ui-98b9e2ab5debac9e_bg.wasm" crossorigin="anonymous" integrity="sha384-8gj4GW8mVEFPu6mO0PNFw1tzzEC2ae8QFS5hQubEjqzndPk0Rg47zAiQ0b+ItTbk" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/pipelines-rs/wasm-ui-7cf9a7071ecf5539.js" crossorigin="anonymous" integrity="sha384-2wh+7EGnNnaU6eRpU+HBAiyAuI61reAS6eCUL8CsgK+c5fYEJ92fO7+4uqc2FgSj"><link rel="preload" href="/pipelines-rs/wasm-ui-7cf9a7071ecf5539_bg.wasm" crossorigin="anonymous" integrity="sha384-9MAQnmwVmW0tdDVGeM9ItCmRk/C7pvburdPEuTRRnFPY76KREh4LbkZXDJnqAriB" as="fetch" type="application/wasm"></head>
 <body>
     <script type="module">
         import init from './wasm_ui.js';
@@ -643,8 +666,8 @@
     </script>
 
 <script type="module">
-import init, * as bindings from '/pipelines-rs/wasm-ui-98b9e2ab5debac9e.js';
-const wasm = await init({ module_or_path: '/pipelines-rs/wasm-ui-98b9e2ab5debac9e_bg.wasm' });
+import init, * as bindings from '/pipelines-rs/wasm-ui-7cf9a7071ecf5539.js';
+const wasm = await init({ module_or_path: '/pipelines-rs/wasm-ui-7cf9a7071ecf5539_bg.wasm' });
 
 
 window.wasmBindings = bindings;

@@ -167,6 +167,29 @@
             color: #bbb;
         }
 
+        .header-right-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .clear-button {
+            background-color: var(--accent-color);
+            border: 1px solid var(--header-color);
+            border-radius: 4px;
+            color: var(--header-color);
+            font-family: var(--mono-font);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .clear-button:hover {
+            background-color: var(--highlight-color);
+            color: white;
+        }
+
         .panel-content {
             flex: 1;
             padding: 0.5rem;
