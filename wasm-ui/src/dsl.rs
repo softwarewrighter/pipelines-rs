@@ -30,6 +30,7 @@
 //! - `UPPER` - Convert records to uppercase
 //! - `LOWER` - Convert records to lowercase
 //! - `REVERSE` - Reverse characters in each record
+//! - `DUPLICATE n` - Repeat each record n times
 //! - Lines starting with `#` are comments
 
 use pipelines_rs::{Pipeline, Record};
@@ -136,6 +137,8 @@ enum Command {
     Lower,
     /// REVERSE - reverse characters in record
     Reverse,
+    /// DUPLICATE n - repeat each record n times
+    Duplicate { n: usize },
 }
 
 /// Parse DSL text into commands.
@@ -215,6 +218,8 @@ fn parse_command(line: &str) -> Result<Command, String> {
         Ok(Command::Lower)
     } else if upper == "REVERSE" || upper.starts_with("REVERSE ") {
         Ok(Command::Reverse)
+    } else if upper.starts_with("DUPLICATE") {
+        parse_duplicate(line)
     } else {
         Err(format!(
             "Unknown command: {}",
@@ -469,6 +474,17 @@ fn parse_literal(line: &str) -> Result<Command, String> {
     Ok(Command::Literal { text })
 }
 
+/// Parse DUPLICATE command.
+/// Format: DUPLICATE n
+fn parse_duplicate(line: &str) -> Result<Command, String> {
+    let rest = line[9..].trim(); // Skip "DUPLICATE"
+    let n: usize = rest.parse().map_err(|_| "DUPLICATE requires a number")?;
+    if n == 0 {
+        return Err("DUPLICATE count must be at least 1".to_string());
+    }
+    Ok(Command::Duplicate { n })
+}
+
 /// Apply commands to records.
 fn apply_commands(records: Vec<Record>, commands: &[Command]) -> Result<Vec<Record>, String> {
     // We need to collect and re-create pipeline for each command
@@ -586,6 +602,14 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
                     let reversed: String = r.as_str().trim_end().chars().rev().collect();
                     Record::from_str(&reversed)
                 })
+                .collect())
+        }
+        Command::Duplicate { n } => {
+            // Repeat each record n times
+            let n = *n;
+            Ok(records
+                .into_iter()
+                .flat_map(|r| std::iter::repeat(r).take(n))
                 .collect())
         }
     }
@@ -1077,5 +1101,67 @@ level";
         // Palindromes should be the same after reverse
         assert!(output.contains("radar"));
         assert!(output.contains("level"));
+    }
+
+    #[test]
+    fn test_parse_duplicate() {
+        let cmd = parse_command("DUPLICATE 3").unwrap();
+        match cmd {
+            Command::Duplicate { n } => assert_eq!(n, 3),
+            _ => panic!("Expected Duplicate"),
+        }
+    }
+
+    #[test]
+    fn test_parse_duplicate_zero_error() {
+        let result = parse_command("DUPLICATE 0");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_execute_duplicate() {
+        let input = "A
+B";
+        let pipeline = r#"PIPE CONSOLE
+| DUPLICATE 2
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 2);
+        assert_eq!(output_count, 4); // 2 records * 2 = 4
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines, vec!["A", "A", "B", "B"]);
+    }
+
+    #[test]
+    fn test_execute_duplicate_three() {
+        let input = "X";
+        let pipeline = r#"PIPE CONSOLE
+| DUPLICATE 3
+| CONSOLE
+?"#;
+
+        let (output, _input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(output_count, 3);
+        let lines: Vec<&str> = output.lines().collect();
+        assert_eq!(lines, vec!["X", "X", "X"]);
+    }
+
+    #[test]
+    fn test_execute_duplicate_one() {
+        let input = "Original";
+        let pipeline = r#"PIPE CONSOLE
+| DUPLICATE 1
+| CONSOLE
+?"#;
+
+        let (output, _input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        // DUPLICATE 1 should just pass through unchanged
+        assert_eq!(output_count, 1);
+        assert_eq!(output, "Original");
     }
 }
