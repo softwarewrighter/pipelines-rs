@@ -1,7 +1,7 @@
 //! Main application component.
 
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use web_sys::{Blob, HtmlAnchorElement, HtmlInputElement, Url};
 use yew::prelude::*;
 
@@ -141,11 +141,8 @@ pub fn app() -> Html {
 
             let window = web_sys::window().unwrap();
             let document = window.document().unwrap();
-            let anchor: HtmlAnchorElement = document
-                .create_element("a")
-                .unwrap()
-                .dyn_into()
-                .unwrap();
+            let anchor: HtmlAnchorElement =
+                document.create_element("a").unwrap().dyn_into().unwrap();
 
             anchor.set_href(&url);
             anchor.set_download("pipeline.pipe");

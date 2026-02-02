@@ -21,6 +21,9 @@
 //! - `SELECT p1,l1,d1; p2,l2,d2; ...` - Select and reposition fields
 //! - `TAKE n` - Keep first n records
 //! - `SKIP n` - Skip first n records
+//! - `LOCATE "pattern"` - Keep records containing pattern (grep-like)
+//! - `LOCATE pos,len "pattern"` - Keep records where field contains pattern
+//! - `NLOCATE "pattern"` - Keep records NOT containing pattern
 //! - Lines starting with `#` are comments
 
 use pipelines_rs::{Pipeline, Record};
@@ -98,13 +101,23 @@ enum Command {
         value: String,
     },
     /// SELECT p1,l1,d1; p2,l2,d2; ...
-    Select {
-        fields: Vec<(usize, usize, usize)>,
-    },
+    Select { fields: Vec<(usize, usize, usize)> },
     /// TAKE n
     Take { n: usize },
     /// SKIP n
     Skip { n: usize },
+    /// LOCATE "pattern" - keep records containing pattern
+    Locate {
+        pattern: String,
+        /// Optional field restriction (pos, len)
+        field: Option<(usize, usize)>,
+    },
+    /// NLOCATE "pattern" - keep records NOT containing pattern
+    Nlocate {
+        pattern: String,
+        /// Optional field restriction (pos, len)
+        field: Option<(usize, usize)>,
+    },
 }
 
 /// Parse DSL text into commands.
@@ -147,8 +160,7 @@ fn parse_commands(text: &str) -> Result<Vec<Command>, String> {
             continue;
         }
 
-        let cmd = parse_command(line)
-            .map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
+        let cmd = parse_command(line).map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
         commands.push(cmd);
     }
 
@@ -169,8 +181,15 @@ fn parse_command(line: &str) -> Result<Command, String> {
         parse_take(line)
     } else if upper.starts_with("SKIP") {
         parse_skip(line)
+    } else if upper.starts_with("NLOCATE") {
+        parse_nlocate(line)
+    } else if upper.starts_with("LOCATE") {
+        parse_locate(line)
     } else {
-        Err(format!("Unknown command: {}", line.split_whitespace().next().unwrap_or(line)))
+        Err(format!(
+            "Unknown command: {}",
+            line.split_whitespace().next().unwrap_or(line)
+        ))
     }
 }
 
@@ -280,8 +299,98 @@ fn parse_quoted_string(s: &str) -> Result<String, String> {
     let s = s.trim();
     if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
         Ok(s[1..s.len() - 1].to_string())
+    } else if s.starts_with('/') && s.ends_with('/') && s.len() >= 2 {
+        // Also accept /pattern/ delimiters (CMS style)
+        Ok(s[1..s.len() - 1].to_string())
     } else {
         Err(format!("Value must be quoted: {}", s))
+    }
+}
+
+/// Parse LOCATE command.
+/// Formats:
+///   LOCATE "pattern"      - search entire record
+///   LOCATE /pattern/      - search entire record (CMS style)
+///   LOCATE pos,len "pattern" - search specific field
+fn parse_locate(line: &str) -> Result<Command, String> {
+    let rest = line[6..].trim(); // Skip "LOCATE"
+
+    // Check if there's a field spec before the pattern
+    // Field spec is pos,len followed by quoted string
+    if let Some(quote_start) = rest.find('"').or_else(|| rest.find('/')) {
+        let before_quote = rest[..quote_start].trim();
+
+        if before_quote.is_empty() {
+            // Just LOCATE "pattern"
+            let pattern = parse_quoted_string(rest)?;
+            Ok(Command::Locate {
+                pattern,
+                field: None,
+            })
+        } else {
+            // LOCATE pos,len "pattern"
+            let parts: Vec<&str> = before_quote.split(',').collect();
+            if parts.len() != 2 {
+                return Err("LOCATE field spec requires pos,len".to_string());
+            }
+
+            let pos: usize = parts[0]
+                .trim()
+                .parse()
+                .map_err(|_| "Invalid position number")?;
+            let len: usize = parts[1]
+                .trim()
+                .parse()
+                .map_err(|_| "Invalid length number")?;
+
+            let pattern = parse_quoted_string(&rest[quote_start..])?;
+            Ok(Command::Locate {
+                pattern,
+                field: Some((pos, len)),
+            })
+        }
+    } else {
+        Err("LOCATE requires a quoted pattern".to_string())
+    }
+}
+
+/// Parse NLOCATE command.
+fn parse_nlocate(line: &str) -> Result<Command, String> {
+    let rest = line[7..].trim(); // Skip "NLOCATE"
+
+    // Check if there's a field spec before the pattern
+    if let Some(quote_start) = rest.find('"').or_else(|| rest.find('/')) {
+        let before_quote = rest[..quote_start].trim();
+
+        if before_quote.is_empty() {
+            let pattern = parse_quoted_string(rest)?;
+            Ok(Command::Nlocate {
+                pattern,
+                field: None,
+            })
+        } else {
+            let parts: Vec<&str> = before_quote.split(',').collect();
+            if parts.len() != 2 {
+                return Err("NLOCATE field spec requires pos,len".to_string());
+            }
+
+            let pos: usize = parts[0]
+                .trim()
+                .parse()
+                .map_err(|_| "Invalid position number")?;
+            let len: usize = parts[1]
+                .trim()
+                .parse()
+                .map_err(|_| "Invalid length number")?;
+
+            let pattern = parse_quoted_string(&rest[quote_start..])?;
+            Ok(Command::Nlocate {
+                pattern,
+                field: Some((pos, len)),
+            })
+        }
+    } else {
+        Err("NLOCATE requires a quoted pattern".to_string())
     }
 }
 
@@ -323,15 +432,42 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
         }
         Command::Select { fields } => {
             let fields = fields.clone();
-            Ok(Pipeline::new(records.into_iter())
-                .select(fields)
-                .collect())
+            Ok(Pipeline::new(records.into_iter()).select(fields).collect())
         }
-        Command::Take { n } => {
-            Ok(Pipeline::new(records.into_iter()).take(*n).collect())
+        Command::Take { n } => Ok(Pipeline::new(records.into_iter()).take(*n).collect()),
+        Command::Skip { n } => Ok(Pipeline::new(records.into_iter()).skip(*n).collect()),
+        Command::Locate { pattern, field } => {
+            let pattern = pattern.clone();
+            match field {
+                Some((pos, len)) => {
+                    let pos = *pos;
+                    let len = *len;
+                    Ok(Pipeline::new(records.into_iter())
+                        .filter(move |r| r.field_contains(pos, len, &pattern))
+                        .collect())
+                }
+                None => {
+                    // Search entire record
+                    Ok(Pipeline::new(records.into_iter())
+                        .filter(move |r| r.as_str().contains(&pattern.as_str()))
+                        .collect())
+                }
+            }
         }
-        Command::Skip { n } => {
-            Ok(Pipeline::new(records.into_iter()).skip(*n).collect())
+        Command::Nlocate { pattern, field } => {
+            let pattern = pattern.clone();
+            match field {
+                Some((pos, len)) => {
+                    let pos = *pos;
+                    let len = *len;
+                    Ok(Pipeline::new(records.into_iter())
+                        .filter(move |r| !r.field_contains(pos, len, &pattern))
+                        .collect())
+                }
+                None => Ok(Pipeline::new(records.into_iter())
+                    .filter(move |r| !r.as_str().contains(&pattern.as_str()))
+                    .collect()),
+            }
         }
     }
 }
@@ -421,5 +557,111 @@ mod tests {
         // Missing ending CONSOLE
         let result = execute_pipeline(input, r#"CONSOLE | FILTER 18,10 = "SALES""#);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_locate_simple() {
+        let cmd = parse_command(r#"LOCATE "SALES""#).unwrap();
+        match cmd {
+            Command::Locate { pattern, field } => {
+                assert_eq!(pattern, "SALES");
+                assert!(field.is_none());
+            }
+            _ => panic!("Expected Locate"),
+        }
+    }
+
+    #[test]
+    fn test_parse_locate_with_field() {
+        let cmd = parse_command(r#"LOCATE 18,10 "SALES""#).unwrap();
+        match cmd {
+            Command::Locate { pattern, field } => {
+                assert_eq!(pattern, "SALES");
+                assert_eq!(field, Some((18, 10)));
+            }
+            _ => panic!("Expected Locate with field"),
+        }
+    }
+
+    #[test]
+    fn test_parse_locate_slash_delimiters() {
+        let cmd = parse_command(r#"LOCATE /ERROR/"#).unwrap();
+        match cmd {
+            Command::Locate { pattern, field } => {
+                assert_eq!(pattern, "ERROR");
+                assert!(field.is_none());
+            }
+            _ => panic!("Expected Locate"),
+        }
+    }
+
+    #[test]
+    fn test_parse_nlocate() {
+        let cmd = parse_command(r#"NLOCATE "SALES""#).unwrap();
+        match cmd {
+            Command::Nlocate { pattern, field } => {
+                assert_eq!(pattern, "SALES");
+                assert!(field.is_none());
+            }
+            _ => panic!("Expected Nlocate"),
+        }
+    }
+
+    #[test]
+    fn test_execute_locate() {
+        let input = "SMITH   JOHN      SALES     00050000
+JONES   MARY      ENGINEER  00075000
+DOE     JANE      SALES     00060000";
+        let pipeline = r#"PIPE CONSOLE
+| LOCATE "SALES"
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 2);
+        assert!(output.contains("SMITH"));
+        assert!(output.contains("DOE"));
+        assert!(!output.contains("JONES"));
+    }
+
+    #[test]
+    fn test_execute_locate_with_field() {
+        let input = "SMITH   JOHN      SALES     00050000
+JONES   MARY      ENGINEER  00075000
+SALESGUY BOB      MARKETING 00040000";
+        let pipeline = r#"PIPE CONSOLE
+| LOCATE 18,10 "SALES"
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        // Only SMITH has SALES in the department field (18,10)
+        // SALESGUY has SALES in name but not in field 18,10
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 1);
+        assert!(output.contains("SMITH"));
+        assert!(!output.contains("SALESGUY"));
+    }
+
+    #[test]
+    fn test_execute_nlocate() {
+        let input = "SMITH   JOHN      SALES     00050000
+JONES   MARY      ENGINEER  00075000
+DOE     JANE      SALES     00060000";
+        let pipeline = r#"PIPE CONSOLE
+| NLOCATE "SALES"
+| CONSOLE
+?"#;
+
+        let (output, input_count, output_count) = execute_pipeline(input, pipeline).unwrap();
+
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 1);
+        assert!(!output.contains("SMITH"));
+        assert!(output.contains("JONES"));
+        assert!(!output.contains("DOE"));
     }
 }
