@@ -669,6 +669,9 @@ pub fn app() -> Html {
 
             <footer class="footer">
                 <span>{ "80-byte fixed-width records | ASCII | Punch card format" }</span>
+                <span class="footer-center">
+                    { format!("Build: {}@{} {}", env!("BUILD_HOST"), env!("BUILD_COMMIT"), env!("BUILD_TIMESTAMP")) }
+                </span>
                 <span class="footer-right">
                     <a href="https://github.com/softwarewrighter/pipelines-rs" target="_blank">{ "GitHub" }</a>
                     { " | MIT License | " }

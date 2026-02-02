@@ -632,6 +632,13 @@
             text-decoration: underline;
         }
 
+        .footer-center {
+            text-align: center;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #888;
+        }
+
         .footer-right {
             text-align: right;
         }
@@ -658,7 +665,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="modulepreload" href="/pipelines-rs/wasm-ui-7cf9a7071ecf5539.js" crossorigin="anonymous" integrity="sha384-2wh+7EGnNnaU6eRpU+HBAiyAuI61reAS6eCUL8CsgK+c5fYEJ92fO7+4uqc2FgSj"><link rel="preload" href="/pipelines-rs/wasm-ui-7cf9a7071ecf5539_bg.wasm" crossorigin="anonymous" integrity="sha384-9MAQnmwVmW0tdDVGeM9ItCmRk/C7pvburdPEuTRRnFPY76KREh4LbkZXDJnqAriB" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/pipelines-rs/wasm-ui-aa2e62fea6ede266.js" crossorigin="anonymous" integrity="sha384-GXwX9StKwPKs9oU+0rX1Q7HYAZaKqeDYMsbEXBftaWuNUs4k9xVDW378+fNJ9WHF"><link rel="preload" href="/pipelines-rs/wasm-ui-aa2e62fea6ede266_bg.wasm" crossorigin="anonymous" integrity="sha384-g13c9xKA+4SY06zIjq1sAcsaEj7gLb++HiA5QB6QI1/W3uBI8+z7jsSyvkD9z/+h" as="fetch" type="application/wasm"></head>
 <body>
     <script type="module">
         import init from './wasm_ui.js';
@@ -666,8 +673,8 @@
     </script>
 
 <script type="module">
-import init, * as bindings from '/pipelines-rs/wasm-ui-7cf9a7071ecf5539.js';
-const wasm = await init({ module_or_path: '/pipelines-rs/wasm-ui-7cf9a7071ecf5539_bg.wasm' });
+import init, * as bindings from '/pipelines-rs/wasm-ui-aa2e62fea6ede266.js';
+const wasm = await init({ module_or_path: '/pipelines-rs/wasm-ui-aa2e62fea6ede266_bg.wasm' });
 
 
 window.wasmBindings = bindings;
