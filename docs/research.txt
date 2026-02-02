@@ -1,0 +1,838 @@
+Skip to content
+Chat history
+
+
+
+
+You said:
+I'd like to demonstrate concepts from IBM (VM) CMS Pipelines and IBM (MVS) TSO Pipelines.  I want to create a Rust-based CLI that implements key concepts, including inputs, outputs, filters, labels, etc.  To keep it similar to the mainframe versions I want the examples to be record-oriented (fixed-length records like 80 byte or 256 byte records).  Demos should be able to filter, count, merge, split, etc.  Future goals: nested pipelines, dynamic pipelines, more inputs/filters/outputs.  The pipeline mechanism should proactively detect deadlocks.  There should be a visual demonstration of data flowing through the pipeline stages.  q.v. online for details about how CMS Pipelines was implemented (if known) and find doumentation and examples that can motivate the ones shown by this "clean room" implementation (subset).  Bear in mind I want to blog/vlog about this.  Summarize what you find, propose the scope and approach.
+ChatGPT said:
+
+Thought for 29s
+
+https://image.slideserve.com/261906/the-pipe-command-l.jpg
+
+https://www.vm.ibm.com/devpages/ALTMARKA/fscms.png
+
+https://www.ibmmainframer.com/static/images/tsoispf/ispf-screen.jpg
+
+https://s2.studylib.net/store/data/005432471_1-60e4d17e4ddc3086d9967e298d4402b2-768x994.png
+Requirements (what you asked for)
+You want a clean-room, Rust CLI inspired by IBM VM/CMS Pipelines and MVS/TSO Pipelines, with:
+
+Record-oriented processing (fixed-length records like 80 or 256 bytes)
+
+Pipeline basics: inputs → filters/transforms → outputs
+
+Key concepts: stages, multiple streams, labels (routing), split/merge, count/filter
+
+Future: nested/dynamic pipelines, more stage types
+
+Proactive deadlock detection
+
+A visual demo of data flowing through stages (good for blog/vlog)
+
+What the mainframe thing actually is (useful facts to copy into your “why this is cool” intro)
+From IBM’s own docs, CMS Pipelines is essentially a device-independent “records in / records out” plumbing system:
+
+Pipelines operate on a sequential stream of records, and stages read/write via a device-independent interface, so you can mix-and-match stages. 
+
+There’s a PIPE command (both CMS and TSO environments) whose operand is a pipeline spec: stages separated by a stage separator. 
+
+Labels exist to connect streams across intersecting pipelines; labels must be defined before reference (a “declare then use” rule). 
+
+You can write your own stages (commonly as REXX stage commands) that interact with the pipeline runtime. 
+
+There are also “subroutine pipeline” ideas like CALLPIPE (a stage that effectively expands into a nested pipeline). 
+
+On the “TSO Pipelines” side: IBM’s modern docs you’ll most easily cite/point readers to are the PIPE TSO / PIPE MVS stage docs (commonly surfaced in IBM NetView docs). They show the same mental model: stages with defined input/output stream counts, and examples of feeding commands and duplicating streams. 
+
+That’s enough to motivate your clean-room subset without copying implementation.
+
+Proposed scope: a “teachable subset” that still feels authentically mainframe
+Phase 1 (MVP): single pipeline, linear stages, fixed records
+Goal: give viewers the “aha”: records move, stages are reusable, and the DSL is compact.
+
+Records
+
+Record<80> and Record<256> (compile-time sizes via const generics)
+
+Treat them as opaque bytes + optional “view helpers” (EBCDIC/ASCII decode as optional extras later)
+
+Core stages (small but expressive)
+
+Inputs
+
+literal("...") → emits one record (padded/truncated)
+
+from-file(path) → reads fixed-size records
+
+from-stdin() → reads lines, packs to record size
+
+Filters / transforms
+
+take(n), drop(n)
+
+match / regex (operate on decoded text view, but keep the underlying bytes)
+
+count() (emits a final count record or a summary side-stream)
+
+map(field_range, transform) (start with simple: upper/lower/replace in a byte range)
+
+Outputs
+
+to-file(path)
+
+to-stdout() (print a safe representation)
+
+null() (sink)
+
+Demo examples (blog/vlog friendly)
+
+“Hello pipeline”:
+
+pipe literal("HELLO") | count | to-stdout
+
+“80-column card deck audit” (classic vibe):
+
+read 80-byte records, filter those with punch-card-ish fields, count, split good/bad to files
+
+Why it works: these demos fit in a short video and establish the record-first identity.
+
+Phase 2: branching, labels, split/merge
+This is where it starts feeling like “real” Pipelines.
+
+Add
+
+dup() (fan-out): one input → N identical outputs
+
+merge() (fan-in): N inputs → one output (interleave or round-robin)
+
+labels: named connection points in the pipeline graph (your DSL can make this explicit)
+
+Demo examples
+
+“Many eyes on one stream”:
+
+from-file(cards) | dup(2) -> ( match(...) | to-file(good), match-not(...) | to-file(bad) )
+
+“Merge two sorted decks” (even if you don’t implement full sort yet, you can merge pre-sorted inputs)
+
+Phase 3: nested + dynamic pipelines, stronger safety guarantees
+Now you earn the nerd-crown.
+
+Add
+
+callpipe { ... } (subroutine pipeline / nested)
+
+dynamic pipeline construction (build a graph from config or runtime rules)
+
+richer stage library
+
+IBM’s CALLPIPE concept is a good historical “anchor” for this phase. 
+
+Architecture & high-level design (Rust-first, testable, and vloggable)
+1) Pipeline = directed graph of stages (not just “a chain”)
+Model it as:
+
+Stage nodes: run(input_streams, output_streams, ctx) -> Result<()>
+
+Streams: typed channels carrying Record<N> plus control messages (EOF, error, backpressure tokens)
+
+This graph-based approach is what enables:
+
+labels
+
+branching/merging
+
+deadlock analysis
+
+visualization
+
+2) Execution model options (and why you’ll probably pick one)
+Option A: Tokio async (recommended for the “visual + deadlock” story)
+
+Each stage is a task.
+
+Channels are bounded to make backpressure real.
+
+You can instrument queue depths and throughput easily.
+
+Option B: Synchronous pull model (iterator-ish)
+
+Great for simplicity, weaker for “true flow visualization” and deadlock realism.
+
+Pick A if your goal includes deadlock detection + live visualization.
+
+Deadlock detection (proactive, not just “it hung”)
+You can treat deadlock as: every runnable stage is blocked waiting on something that can never happen.
+
+A practical approach:
+
+Bounded channels everywhere (otherwise backpressure disappears and “deadlock” becomes mushy).
+
+Maintain a runtime wait-for graph:
+
+Stage A waiting to send (because downstream queue full)
+
+Stage B waiting to receive (because upstream empty but not closed)
+
+Detect cycles in that dependency graph.
+
+When a cycle appears and no “progress events” occur for a threshold, you have a deadlock candidate.
+
+Emit a diagnostic report:
+
+cycle path
+
+which channels are full/empty
+
+last progress timestamps per stage
+
+This matches the kind of “systems-thinking” blog angle you want, and it’s straightforward to explain visually.
+
+(If you want a research-ish citation for “deadlocks in pipelined graphs exist and can be detected at runtime”, there are academic discussions of deadlock in pipelined graphs, though not specifically CMS Pipelines. 
+)
+
+Visual demonstration (make the invisible visible)
+You want a UI that makes dataflow feel physical.
+
+Suggested UI: a TUI “pipeline oscilloscope”
+Draw each stage as a box
+
+Draw arrows as channels
+
+Show:
+
+queue depth (0..capacity)
+
+records/sec in/out
+
+total records processed
+
+blocked state (waiting send/recv)
+
+A “single-step / slow mode” that intentionally throttles to make flow obvious on video
+
+Implementation detail:
+
+Add instrumentation hooks to every channel send/recv
+
+Collect stats into a shared Arc<Mutex<Metrics>> (or a lock-free structure)
+
+Render with ratatui (formerly tui-rs)
+
+This becomes your killer demo: “here’s the same pipeline, now watch it breathe.”
+
+DSL shape (clean-room but nostalgically familiar)
+You can keep it “pipe-ish” without cloning IBM syntax.
+
+Example:
+
+mypipe: read(file="CARDS.A", rec=80)
+  | match(cols=1..8, regex="^ERROR")
+  | tee(label="errcopy")
+  | count
+  | write(stdout)
+
+errcopy: label("errcopy") | write(file="ERRORS.A")
+This gives you:
+
+labels
+
+multiple pipelines in one spec
+
+readability on camera
+
+IBM’s docs emphasize that PIPE operands can contain at least one pipeline and use stage separators; labels connect intersecting pipelines—so this “multiple named pipelines” layout maps well conceptually. 
+
+Methodology & tooling (so an AI coding agent can actually build it)
+Crates
+
+pipeline-core (graph, scheduler, channels, deadlock detector)
+
+pipeline-stages (built-in stages)
+
+pipeline-cli (DSL parser + command line)
+
+pipeline-viz (TUI)
+
+Testing
+
+Golden tests with small fixed-record fixtures (80-byte)
+
+Property tests for record padding/truncation invariants
+
+Deterministic execution mode for CI (single-thread “simulator” runner)
+
+Pros / cons / risks / alternatives
+Pros
+Extremely demoable: small records, visible flow, nostalgic syntax, real systems lessons.
+
+Clear learning ladder: linear → branching → labels → nested.
+
+Rust is perfect for “record size is law” using const generics.
+
+Cons / risks
+Sorting/joining stages quickly demand buffering (memory) and more complex stream protocols.
+
+Deadlock detection can false-positive if you don’t define “progress” carefully (fixable: add time + event criteria).
+
+Text handling gets messy if you try to be too authentic too fast (EBCDIC, fixed columns, etc.). Keep byte-first, add codecs later.
+
+Alternatives
+Build the runtime as a deterministic simulator first (no threads), then “upgrade” to async for visualization.
+
+Use an existing stream-processing lib, but you’ll lose the pedagogical “I built the pipeline engine” punchline.
+
+Suggested “blog/vlog arc” (begin with the end in mind)
+Video 1 (short): “Pipelines, but make them 80-column cards”
+
+one pipeline, count/filter, show before/after files
+
+Video 2: “Labels & branching: one stream, two destinies”
+
+Video 3: “Deadlocks in pipelines (and how we catch them)”
+
+Video 4: “CALLPIPE: pipelines that call pipelines”
+
+What I didn’t find (and what that implies)
+I found lots of official concept + usage documentation (PIPE command, stages, labels, writing stages, CALLPIPE), but not much publicly accessible detail about the original internal implementation (scheduler structure, exact deadlock strategy) beyond general descriptions. That’s fine: your “clean room” story can explicitly say:
+
+“We’re recreating the model (records, stages, streams, labels) from manuals, not cloning IBM internals.”
+
+And you can still be rigorous by defining your own runtime semantics clearly.
+
+Source highlights you can cite in your README / blog
+IBM CMS Pipelines User’s Guide and Reference (PDF) describing record streams, device-independent interface, and PIPE command. 
+
+IBM z/VM docs: Basic Concepts and Functions for PIPE syntax framing. 
+
+IBM z/VM docs: Labels behavior and constraints. 
+
+IBM z/VM docs: Writing your own stage commands (REXX integration). 
+
+CALLPIPE / subroutine pipeline discussion (good for your “future goals” anchor). 
+
+PIPE TSO / MVS stage docs showing staged command flow and stream counts (good for the “TSO angle”). 
+
+Concrete starting scope (the “ship something in a week” version)
+If you want the tightest scope that still feels legit:
+
+Record type: Record<80> + Record<256>
+
+DSL: linear stages + named labels
+
+Stages: literal, read(file), write(file|stdout), match, take/drop, count, dup(2), merge(2)
+
+Runtime: Tokio tasks + bounded channels
+
+Viz: TUI showing queue depth + blocked states
+
+Deadlock detector: wait-for cycle detection + “no progress” timeout + report
+
+That set is small enough to build incrementally, yet rich enough to make a great blog series and a compelling visualization.
+
+Tiny bit of historical seasoning (optional, but fun)
+You can frame this as: “Unix pipes are byte streams; CMS Pipelines are record streams with a stage ecosystem.” IBM’s own wording about records and device independence supports that contrast. 
+
+If you turn this into a repo, a strong README structure is: Concept → DSL → Examples → Visual Mode → Deadlock Story → Roadmap → Links. And yes: making everything “card-deck flavored” (80 bytes, columns, labels) will make it memorable in a way that generic stream demos aren’t.
+
+(And because the universe is mischievous: the moment you implement merge, you’ll accidentally reinvent half a database execution engine. Which is a feature, not a bug.)
+
+You said:
+So, in order to be visually historically accurate, I'd like a pipeline parser that accepts the syntax documented by IBM.  The pipe programs should be readable from a file.  What is a "correct" file type to use?  Show me some example pipe commands using actual CMS or TSO source from documents.  Suggest how we will parse these
+ChatGPT said:
+
+Thought for 32s
+Requirements recap
+You want your Rust CLI to accept IBM-documented PIPE syntax, load “pipe programs” from a file, and you want historically accurate examples (CMS + TSO-ish) pulled from real docs, plus a practical plan for parsing.
+
+What file type is “correct” historically?
+On the real systems, a pipeline spec most often appears in one of these “containers”:
+
+VM/CMS: embedded inside a REXX EXEC (filetype EXEC) as a quoted command string, often in portrait format (one stage per line) using REXX continuation commas. 
+
+TSO: embedded in a CLIST or REXX exec (on z/OS), similarly as a command string (the exact library/dataset organization differs, but the “pipeline spec is an argument to PIPE” idea is the same). 
+
+For your modern clean-room CLI, the “correct” file type is simply:
+
+✅ A plain text file containing one PIPE command (or pipeline spec) per stanza
+Pick something like:
+
+*.pipe / *.pipes (human obvious)
+
+or *.rexxpipe if you want to lean into the heritage vibe
+
+Why plain text is the right choice
+
+IBM itself frames the pipeline as: PIPE + argument string called a pipeline specification. 
+
+Real-world users already treated it as “a string” (often multi-line assembled into one string by REXX). 
+
+So: store the spec, not the surrounding EXEC/CLIST boilerplate—unless you explicitly want to parse REXX too (which is… a whole separate hobby).
+
+Historically accurate examples (from IBM docs)
+A) CMS Pipelines examples (z/VM CMS Pipelines User’s Guide)
+Read a CMS file and count words, then display:
+
+pipe < test data a | count words | console 
+
+Read a file, sort it, and put results into a REXX stem:
+
+pipe < test data a | sort | stem lines. 
+
+“Portrait format” multi-line PIPE (common in execs)
+The guide shows pipelines split across multiple lines in exec style (you’ll see pipe on its own line and then subsequent stage lines). 
+
+Also: the guide explicitly notes the default stage separator (the “pipe character” varies by terminal/locale), which matters for parsing options:
+
+Default stage separator is character X'4F' (often displayed as |, sometimes as !). 
+
+B) TSO/MVS-flavored examples (IBM NetView “Programming: Pipes”)
+These are “PIPE MVS” / “PIPE TSO” stage docs (NetView uses the same PIPE-style pipeline stage language and is a very citeable source of real specs):
+
+Issue an MVS command, wait for responses, print them:
+
+PIPE MVS D A,L | CORRWAIT 10 | CONSOLE 
+
+Trigger MVS stage using a literal record:
+
+PIPE LITERAL /Issue a command to MVS/ | MVS D A,L | CORRWAIT 10 | CONSOLE 
+
+A label-like / branching-ish example (shows label syntax with a: and options):
+
+PIPE (END ;) a: MEML USER.INIT | CONS ONLY; a:| COLOR YEL | CONS 
+
+Simple member listing example:
+
+PIPE LIT /DSIPARM DSIVTAM/ | SPLIT | MEML | CONS ONLY 
+
+Those are gold for your blog/video because they show: options, labels, staging, and “records are messages.”
+
+How we should parse IBM PIPE syntax (practical plan)
+1) Decide what you’re parsing: “pipeline spec file” vs “full CMS/TSO command language”
+To keep this sane and historically faithful:
+
+Parse PIPE command lines / stanzas, not the whole CMS/TSO shell.
+
+Your file contains pipeline specs in one of two canonical formats:
+
+Single-line: PIPE ... | ... | ...
+
+Portrait format: one stage per line (with a continuation rule)
+
+This matches how people actually wrote them. 
+
+2) Use a 2-phase parser: preprocess → lex/parse
+Phase A: Preprocess (turn file into a single “spec string” per pipeline)
+Support these continuation styles:
+
+REXX-style portrait format: lines ending with a trailing comma , continue (because that’s how REXX builds one long string). 
+
+Modern plain-text continuation (for your .pipe files): allow:
+
+trailing \ continuation, or
+
+indentation-based continuation (lines starting with whitespace continue the previous line)
+
+Also:
+
+Strip comments in a controlled way:
+
+Support /* ... */ (REXX-ish) because it shows up in real pipeline-in-exec examples. 
+
+Optionally support # ... for your modern files.
+
+Phase B: Lexer + grammar
+You want a lexer that understands “separator tokens” only when not inside a quoted/delimited literal.
+
+Key tokens to recognize:
+
+PIPE keyword (case-insensitive)
+
+Global options immediately after PIPE, usually in parentheses: PIPE (END ;) ... 
+
+Stage separator default is | (but allow overrides; see below) 
+
+Label definition pattern like a: at stage boundaries 
+
+Delimited strings: IBM examples commonly use /.../ (literal payload) and sometimes ? ... ? in CMS SPECS examples. 
+
+A workable grammar (clean-room, but aligned with the docs) looks like:
+
+pipeline := "PIPE" options? stage_chain
+
+options := "(" option_item+ ")"
+
+stage_chain := stage (stage_sep stage)*
+
+stage := label_def? stage_words
+
+label_def := IDENT ":"
+
+stage_words := token+ where token can be:
+
+bareword
+
+quoted '...' (REXX-ish quoting if you want it)
+
+delimited /.../ or ?...? (treat as one token)
+
+parenthesized operands inside a stage (don’t confuse with PIPE global options)
+
+3) Handle stage separator changes (important for “historically accurate”)
+IBM notes the “stage separator” can vary and can be reassigned via PIPE options. 
+
+So your parser should:
+
+Default separator: |
+
+If you see a global option that changes separator, re-lex using that separator (or lex with a “current separator” that can be updated once options are parsed).
+
+4) Parsing strategy recommendation
+For a Rust CLI that you’ll evolve:
+
+Use a hand-rolled lexer (state machine) + a small recursive-descent parser.
+
+Reason: you must correctly handle delimiter-pairs (/.../, ?...?) and “separator is data unless we’re in the right state.”
+
+Keep a faithful AST:
+
+Pipeline { options, stages: Vec<Stage> }
+
+Stage { label: Option<String>, verb: String, args: Vec<Token> }
+
+This AST also powers your future goals:
+
+nested pipelines (CALLPIPE-style)
+
+dynamic pipelines
+
+deadlock diagnostics and visualization (graph is derived from stage connectivity)
+
+Recommended file format for your CLI (concrete proposal)
+Use a .pipe file with stanzas:
+
+Blank line separates pipelines
+
+First non-comment line starts with PIPE (or you allow dropping the keyword and assume implicit PIPE—your choice)
+
+Continuations: \ or trailing comma
+
+Example .pipe (modern but faithful):
+
+PIPE < test data a | sort | stem lines.
+
+PIPE (END ;) a: MEML USER.INIT | CONS ONLY;
+a: | COLOR YEL | CONS
+
+PIPE LITERAL /Issue a command to MVS/
+| MVS D A,L
+| CORRWAIT 10
+| CONSOLE
+Each of those is directly motivated by IBM examples. 
+
+How this supports your “visual demo” goal
+Once parsed into an AST, you can:
+
+Compile to a graph (nodes = stages, edges = streams; labels create named edges)
+
+Run with bounded queues, emit per-edge “record moved” events
+
+Visualize in a TUI as “records/sec + queue depth + blocked state”
+
+Add deadlock detection as a runtime property of the graph (wait-for cycles)
+
+The parser is the foundation stone: if the syntax feels authentic, the whole demo feels like time travel with better fonts.
+
+If you continue down this rabbit hole, the next very high-leverage step is to collect a small “fixture corpus” of 20–30 real PIPE specs (CMS + NetView/TSO-ish) and build parser golden tests from them. That gives you historical accuracy and a regression suite in one move.
+
+You said:
+Okay, to rein in the scope, let's make some simplifying assumptions (constraints).  Avoid mention or use of REXX.  Implement custom pipe stages (or what are they called) for input, filter, output verbs, using Rust.  These would be configured at start up and a reference to a "verb" that is not registered/configured is an error.  We can add an extension (REXX-like) scripting capability in the (far) future.  To make a visual demo (live demo and subject for MCP/Playwright) there should be either a TUI or Web UI (Yew/WASM) that has an editor and visual debugger with the ability to "step" "reset" "run" a pipe and "load" "save" pipe specs/programs. We will implement a small subset of general record-oriented verbs, nothing MVS or DASD or even EBCDIC specific (yet).  So, assume ASCII, and come up with a list of input/filter/output verbs that make a reasonable subset suitable for demo/interaction to get a feel for what it was like to use this on a mainframe.
+ChatGPT said:
+Constraints (locked in)
+No REXX mention/use in the implementation. (Future scripting is “someday”, not now.)
+
+Pipeline spec references verbs; verbs must be registered at startup or it’s an error.
+
+Record-oriented, fixed-size (80/256), ASCII for now.
+
+Small, demo-friendly subset: input / filter / output.
+
+Must support an interactive visual debugger: editor + step / reset / run + load / save.
+
+Not MVS/DASD/EBCDIC-specific yet; just the vibe.
+
+Cool. That’s a beautifully “bounded” first release. Let’s pick a subset that feels like mainframe pipelines without dragging in a mainframe. 🙂
+
+Design shape (so the verbs make sense)
+Execution model that matches “step/run”
+To make stepping clean, treat the pipeline as a deterministic machine:
+
+Records flow through stages.
+
+A single step advances the system by one record movement (or one “tick”), producing one UI event.
+
+run just loops stepping until the pipeline is quiescent (EOF everywhere, or deadlock, or error).
+
+This pushes you toward a pull-based simulation core or an async core with a deterministic “scheduler” mode. Either works, but for a debugger MVP, the simulator core is easiest.
+
+Record model
+Record<N> fixed-size bytes (ASCII for display).
+
+UI presents:
+
+printable ASCII preview (replace non-printables with · or ␀)
+
+optional “columns” view (0..N-1)
+
+Most verbs operate on:
+
+whole record (string view)
+
+or a column slice [start..end]
+
+Subset of verbs (input / filter / output)
+The goal: it should feel like you can build real little “card deck” workflows—counting, filtering, transforming columns, splitting streams.
+
+I’ll list verbs with:
+
+Category
+
+Purpose
+
+Minimum options
+
+Why it earns its spot (demo value)
+
+Inputs (sources)
+These produce records into the pipeline.
+
+1) LITERAL /text/
+Purpose: emit one record (or multiple if you allow \n splitting).
+
+Options: rec=80|256 default from pipeline.
+
+Demo value: immediate “hello pipeline” without files.
+
+2) GEN n
+Purpose: generate n synthetic records: 00000001 ...
+
+Options: n, optional prefix=, width=, start=1
+
+Demo value: lets you demonstrate flow + performance + count without any setup.
+
+3) READ path
+Purpose: read fixed-length records from file.
+
+Options: path, optional trimnl if you also support line-based.
+
+Demo value: makes it feel “real” and supports load/save workflows.
+
+4) LINES path (optional, but handy)
+Purpose: read line-delimited text and pack/pad into fixed records.
+
+Options: path
+
+Demo value: reduces friction in demos (most people have text files, not fixed-record files).
+
+Filters / transforms (stage workhorses)
+5) TAKE n
+Purpose: pass first n records, then EOF.
+
+Demo value: stepping becomes manageable.
+
+6) DROP n
+Purpose: skip first n.
+
+Demo value: shows statefulness.
+
+7) COUNT
+Purpose: consume records and emit a single summary record at EOF.
+
+Output record example: COUNT=123
+
+Demo value: classic pipeline “reduce” and satisfying in UI.
+
+8) MATCH /regex/ [COLS a..b]
+Purpose: pass only records matching regex (whole record or column slice).
+
+Options: pattern, optional column range.
+
+Demo value: the “grep moment”, but record/column flavored.
+
+9) NOTMATCH /regex/ [COLS a..b]
+Purpose: invert MATCH.
+
+Demo value: makes split/route demos easier.
+
+10) CUT a..b
+Purpose: keep only a slice of columns, pad/truncate to record size.
+
+Demo value: introduces “columns matter” without heavy syntax.
+
+11) SET a..b /text/
+Purpose: overwrite a column range with text (padded/truncated into that range).
+
+Demo value: very “card deck editing” vibe.
+
+12) TRIM
+Purpose: trim trailing spaces for display (but keep record size internally).
+
+Demo value: makes UI output more readable.
+
+13) UPPER [COLS a..b] and LOWER [COLS a..b]
+Purpose: case transforms.
+
+Demo value: visible, immediate effect, good for step mode.
+
+14) REPLACE /regex/ /repl/ [COLS a..b]
+Purpose: regex replace on whole record or slice.
+
+Demo value: shows non-trivial transform but still approachable.
+
+15) HASH [COLS a..b]
+Purpose: replace slice with short hash (e.g., hex of xxhash) for anonymization.
+
+Demo value: fun “data pipeline” realism without domain specifics.
+
+Routing / topology verbs (small but powerful)
+These are optional in MVP, but they create that “pipeline language” feel.
+
+16) DUP k
+Purpose: replicate each record to k outputs.
+
+Demo value: makes branching visible in the debugger.
+
+17) SPLIT
+Purpose: convenience alias for DUP 2.
+
+Demo value: historically “split” is a common mental model.
+
+18) TEE path
+Purpose: write a copy to file while passing through.
+
+Demo value: incredibly useful and great to watch in UI.
+
+19) MERGE
+Purpose: combine two inputs into one output (round-robin).
+
+Demo value: demonstrates fan-in and scheduler behavior.
+
+If you want to keep topology out of v1, keep only TEE (since it’s conceptually simple) and add DUP/MERGE in v2.
+
+Outputs (sinks)
+20) WRITE path
+Purpose: write fixed-length records.
+
+Demo value: round-trip.
+
+21) CONSOLE
+Purpose: print record preview to stdout.
+
+Demo value: simplest output for CLI runs.
+
+22) NULL
+Purpose: sink (discard).
+
+Demo value: useful for measuring / testing upstream behavior.
+
+23) STATS
+Purpose: emit per-stage stats at end (records in/out, drops, time).
+
+Demo value: complements visual debugger; good for blog screenshots.
+
+A “reasonable subset” for v1 (tight and demo-ready)
+If we’re being ruthless about scope but still want a great feel:
+
+Inputs: LITERAL, GEN, READ
+Filters: TAKE, DROP, MATCH, CUT, SET, UPPER, COUNT
+Outputs: CONSOLE, WRITE, NULL
+Nice-to-have: TEE, STATS
+
+That’s enough to make:
+
+toy data
+
+column-oriented editing
+
+filtering
+
+counting
+
+persistence
+
+satisfying interactive stepping
+
+Example demo pipelines (ASCII, fixed records)
+1) “Card deck warmup”
+PIPE GEN 20 | TAKE 5 | CONSOLE
+2) “Column editing vibe”
+PIPE GEN 10 | SET 0..7 /ID______/ | CONSOLE
+3) “Filter by columns”
+PIPE READ cards.dat | MATCH /ERROR/ COLS 0..15 | COUNT | CONSOLE
+4) “Extract a field”
+PIPE READ cards.dat | CUT 10..29 | CONSOLE
+5) “Tee to a file while continuing”
+PIPE READ cards.dat | MATCH /WARN/ | TEE warn.dat | COUNT | CONSOLE
+These will look fantastic in a visual debugger because every step does something legible.
+
+How verbs are registered (fits your constraint)
+At startup:
+
+Build a registry: HashMap<String, StageFactory>
+
+StageFactory parses its own operands (so the parser stays simple)
+
+Unknown verb → error with suggestions (“did you mean …?”)
+
+That gives you:
+
+controlled surface area (no dynamic scripting)
+
+easy extension later
+
+clean error messages in UI
+
+UI recommendation for MCP/Playwright
+For Playwright-driven demos, a Web UI is the path of least pain:
+
+Editor panel (pipeline text)
+
+“Compile” shows parsed stages (and errors)
+
+Visual graph view (stages + queues)
+
+Controls: Run / Step / Reset
+
+Timeline log of record movements
+
+A TUI is great for terminal purists, but Playwright + browser automation will be smoother and more reproducible on video.
+
+A very practical compromise:
+
+Core engine in Rust
+
+Web UI in Yew/WASM
+
+Engine runs in WASM for deterministic stepping (no server needed)
+
+Save/load from browser local storage + file import/export
+
+Suggested “feel like IBM” touches (without IBM-specifics)
+Default record size 80 (“card deck mode”), option 256
+
+Show column ruler 0123456789... in record viewer
+
+Stage separators and label syntax accepted, but verbs are your own subset
+
+Errors are stern and helpful (authentic mainframe energy)
+
+If you keep the v1 verb list tight (the v1 subset above), you can build the interactive debugger early and let it drive the rest of development. The debugger becomes the product, and the verbs are just plug-ins feeding it new toys.
+
+
+
+No file chosenNo file chosen
+ChatGPT can make mistakes. Check important info.
+

@@ -1,0 +1,16 @@
+[workspace]
+members = [".", "wasm-ui"]
+resolver = "2"
+
+[package]
+name = "pipelines-rs"
+version = "0.1.0"
+edition = "2024"
+description = "Mainframe-style 80-byte record pipeline processing"
+license = "MIT"
+
+[dependencies]
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.0"
