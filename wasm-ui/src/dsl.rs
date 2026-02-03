@@ -1,7 +1,4 @@
 use pipelines_rs::{Pipeline, Record};
-use pipelines_rs::dsl::{DebugCallbacks, DebugInfo, execute_pipeline_debug};
-
-pub use pipelines_rs::dsl::{DebugCallbacks, DebugInfo, execute_pipeline_debug};
 
 //! DSL parser and executor for pipeline commands.
 //!
@@ -699,6 +696,8 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
         }
     }
 }
+
+pub use pipelines_rs::dsl::{DebugCallbacks, DebugInfo, execute_pipeline_debug};
 
 #[cfg(test)]
 mod tests {

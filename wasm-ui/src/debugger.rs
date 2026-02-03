@@ -185,12 +185,9 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                                 }}
                             </div>
                         </div>
+                        </div>
                     </div>
-                    
-                    <button class="expand-all-btn">
-                        Expand All Input/Output
-                    </button>
-                }
+                </div>
             }}
         </div>
     }
