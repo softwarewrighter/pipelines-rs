@@ -178,7 +178,11 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
 ## Code Quality Rules
 
 **Strict Requirements:**
-- **Zero clippy warnings** - Never use `#[allow(...)]` to suppress
+- **Zero clippy warnings** - CRITICAL: Never use `#[allow(...)]` to suppress clippy warnings. Instead:
+  - Fix the underlying problem using best-practice/idiomatic Rust
+  - Ask the user for help if unsure about the best approach
+  - DO NOT guess novel workarounds or quick fixes
+  - If clippy suggests a change, implement it properly or discuss with the user
 - **Files under 500 lines** - Prefer 200-300
 - **Functions under 50 lines** - Prefer 10-30
 - **Max 3 TODOs per file** - Never commit FIXMEs
@@ -258,7 +262,7 @@ markdown-checker -f "**/*.md"
 
 **Don't:**
 - ❌ Run `trunk build` directly - use `./scripts/build.sh`
-- ❌ Use `#[allow(...)]` - fix the actual issue
+- ❌ Use `#[allow(...)]` to suppress clippy warnings - fix the actual issue using best-practice/idiomatic Rust, or ask for help
 - ❌ Commit FIXMEs - use TODOs sparingly
 - ❌ Write files > 500 lines - split them up
 - ❌ Skip tests - TDD is required
