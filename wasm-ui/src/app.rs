@@ -46,6 +46,17 @@ pub struct TutorialStep {
 
 const TUTORIALS: &[TutorialStep] = &[
     TutorialStep {
+        name: "Hello World",
+        description: "Welcome to pipelines-rs!\n\n\
+            PIPE starts the pipeline. Instead of CONSOLE (which reads input),\n\
+            we use LITERAL to inject a fixed record.\n\n\
+            LITERAL \"text\" creates a record with the given text.\n\
+            | CONSOLE writes the result to Output Records.\n\
+            ? marks the end of the pipeline.\n\n\
+            Click Next to see HELLO, WORLD appear in the output!",
+        example_pipeline: "# Hello World - your first pipeline!\nPIPE LITERAL \"HELLO, WORLD\"\n| CONSOLE\n?",
+    },
+    TutorialStep {
         name: "PIPE/CONSOLE",
         description: "The simplest pipeline - like Unix 'cat'!\n\n\
             PIPE CONSOLE reads from the Input Records panel.\n\
@@ -224,9 +235,7 @@ GARCIA  CARLOS    SALES     00045000
 TAYLOR  SUSAN     MARKETING 00065000
 BROWN   MICHAEL   ENGINEER  00090000"#;
 
-const DEFAULT_PIPELINE: &str = r#"PIPE CONSOLE
-| FILTER 18,10 = "SALES"
-| SELECT 0,8,0; 28,8,8
+const DEFAULT_PIPELINE: &str = r#"PIPE LITERAL "HELLO, WORLD"
 | CONSOLE
 ?"#;
 
