@@ -9,6 +9,7 @@ use web_sys::{Blob, HtmlAnchorElement, HtmlInputElement, HtmlSelectElement, Url}
 use yew::prelude::*;
 
 use crate::components::{InputPanel, OutputPanel, PipelinePanel};
+use crate::debugger::{DebuggerPanel, DebuggerState};
 use crate::dsl::execute_pipeline;
 
 /// Render CSS-animated countdown with cycling dots.
@@ -207,6 +208,10 @@ pub struct AppState {
     pub tutorial_delay: u32,
     /// Countdown seconds remaining (for auto mode display).
     pub countdown: u32,
+    /// Show debugger tab instead of pipeline editor.
+    pub show_debugger_tab: bool,
+    /// Debugger state when debugger tab is active.
+    pub debugger_state: DebuggerState,
 }
 
 impl Default for AppState {
@@ -222,6 +227,8 @@ impl Default for AppState {
             auto_mode: false,
             tutorial_delay: 5,
             countdown: 0,
+            show_debugger_tab: false,
+            debugger_state: DebuggerState::new(),
         }
     }
 }
@@ -586,7 +593,35 @@ pub fn app() -> Html {
                     <p class="subtitle">{ "Mainframe-Style 80-Byte Record Processing" }</p>
                 </div>
                 <div class="header-right">
-                    if state.tutorial_step.is_some() {
+                    <div class="tab-switcher">
+                        <button
+                            class={if !state.show_debugger_tab {"tab-btn active"} else {"tab-btn"}}
+                            onclick={Callback::from({
+                                let state = state.clone();
+                                move |_| {
+                                    let mut new_state = (*state).clone();
+                                    new_state.show_debugger_tab = false;
+                                    state.set(new_state);
+                                }
+                            })}
+                        >
+                            {"Pipeline Editor"}
+                        </button>
+                        <button
+                            class={if state.show_debugger_tab {"tab-btn active"} else {"tab-btn"}}
+                            onclick={Callback::from({
+                                let state = state.clone();
+                                move |_| {
+                                    let mut new_state = (*state).clone();
+                                    new_state.show_debugger_tab = true;
+                                    state.set(new_state);
+                                }
+                            })}
+                        >
+                            {"Visual Debugger"}
+                        </button>
+                    </div>
+                    if !state.show_debugger_tab && state.tutorial_step.is_some() {
                         <div class="speed-control">
                             <label class="speed-label">{ "Delay:" }</label>
                             <input
@@ -621,17 +656,38 @@ pub fn app() -> Html {
                         on_change={on_input_change}
                     />
 
-                    <PipelinePanel
-                        value={state.pipeline_text.clone()}
-                        on_change={on_pipeline_change}
-                        on_run={on_run.clone()}
-                        on_load={on_load}
-                        on_save={on_save}
-                        show_run_tooltip={state.tutorial_phase == TutorialPhase::ShowingRunTooltip}
-                        on_tooltip_dismiss={on_tutorial_cancel.clone()}
-                        auto_mode={state.auto_mode}
-                        countdown={state.countdown}
-                    />
+                    {if !state.show_debugger_tab {
+                        html! {
+                            <PipelinePanel
+                                value={state.pipeline_text.clone()}
+                                on_change={on_pipeline_change}
+                                on_run={on_run.clone()}
+                                on_load={on_load}
+                                on_save={on_save}
+                                show_run_tooltip={state.tutorial_phase == TutorialPhase::ShowingRunTooltip}
+                                on_tooltip_dismiss={on_tutorial_cancel.clone()}
+                                auto_mode={state.auto_mode}
+                                countdown={state.countdown}
+                            />
+
+                            <OutputPanel
+                                value={state.output_text.clone()}
+                                error={state.error.clone()}
+                                stats={state.stats.clone()}
+                                show_tutorial_buttons={state.tutorial_phase == TutorialPhase::ShowingOutputButtons}
+                            />
+                        }
+                    } else {
+                        html! {
+                            <DebuggerPanel
+                                input_text={state.input_text.clone()}
+                                pipeline_text={state.pipeline_text.clone()}
+                                on_run={on_run.clone()}
+                            />
+                        }
+
+                        }
+                    }
 
                     <OutputPanel
                         value={state.output_text.clone()}

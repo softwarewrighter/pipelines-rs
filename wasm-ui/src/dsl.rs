@@ -1,42 +1,32 @@
 use pipelines_rs::{Pipeline, Record};
 
-//! DSL parser and executor for pipeline commands.
-//!
-//! Pipeline format (CMS Pipelines style):
-//! ```text
-//! PIPE CONSOLE
-//! | FILTER 18,10 = "SALES"
-//! | SELECT 0,8,0; 28,8,8
-//! | CONSOLE
-//! ?
-//! ```
-//!
-//! - `PIPE CONSOLE` starts pipeline, reading from input
-//! - `| <stage>` continues to next stage
-//! - `| CONSOLE` writes to output
-//! - `?` on its own line marks end of pipeline
-//!
-//! Supported stages:
-//! - `CONSOLE` - Read from input (first) or write to output (last)
-//! - `FILTER pos,len = "value"` - Keep records where field equals value
-//! - `FILTER pos,len != "value"` - Omit records where field equals value
-//! - `SELECT p1,l1,d1; p2,l2,d2; ...` - Select and reposition fields
-//! - `TAKE n` - Keep first n records
-//! - `SKIP n` - Skip first n records
-//! - `LOCATE "pattern"` - Keep records containing pattern (grep-like)
-//! - `LOCATE pos,len "pattern"` - Keep records where field contains pattern
-//! - `NLOCATE "pattern"` - Keep records NOT containing pattern
-//! - `COUNT` - Count records and emit summary (e.g., "COUNT=42")
-//! - `CHANGE "old" "new"` - Replace occurrences of old with new (sed-like)
-//! - `LITERAL "text"` - Append a literal record to the stream
-//! - `UPPER` - Convert records to uppercase
-//! - `LOWER` - Convert records to lowercase
-//! - `REVERSE` - Reverse characters in each record
-//! - `DUPLICATE n` - Repeat each record n times
-//! - Lines starting with `#` are comments
-
+// DSL parser and executor for pipeline commands.
+//
+// - `PIPE CONSOLE` starts pipeline, reading from input
+// - `| <stage>` continues to next stage
+// - `| CONSOLE` writes to output
+// - `?` on its own line marks end of pipeline
+//
+// Supported stages:
+// - `CONSOLE` - Read from input (first) or write to output (last)
+// - `FILTER pos,len = "value"` - Keep records where field equals value
+// - `FILTER pos,len != "value"` - Omit records where field equals value
+// - `SELECT p1,l1,d1; p2,l2,d2; ...` - Select and reposition fields
+// - `TAKE n` - Keep first n records
+// - `SKIP n` - Skip first n records
+// - `LOCATE "pattern"` - Keep records containing pattern (grep-like)
+// - `LOCATE pos,len "pattern"` - Keep records where field contains pattern
+// - `NLOCATE "pattern"` - Keep records NOT containing pattern
+// - `COUNT` - Count records and emit summary (e.g., "COUNT=42")
+// - `CHANGE "old" "new"` - Replace occurrences of old with new (sed-like)
+// - `LITERAL "text"` - Append a literal record to the stream
+// - `UPPER` - Convert records to uppercase
+// - `LOWER` - Convert records to lowercase
+// - `REVERSE` - Reverse characters in each record
+// - `DUPLICATE n` - Repeat each record n times
+// - Lines starting with `#` are comments
+//
 use pipelines_rs::dsl::{execute_pipeline_debug, DebugCallbacks, DebugInfo};
-use pipelines_rs::{Pipeline, Record};
 
 /// Execute a pipeline defined by DSL text on input records.
 ///
@@ -697,7 +687,7 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
     }
 }
 
-pub use pipelines_rs::dsl::{DebugCallbacks, DebugInfo, execute_pipeline_debug};
+pub use pipelines_rs::dsl::{execute_pipeline_debug, DebugCallbacks, DebugInfo};
 
 #[cfg(test)]
 mod tests {
