@@ -133,8 +133,8 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                                             {info.stage_name.clone()}
                                         </span>
                                         <span class="record-count">
-                                            {"→ "}{info.output_count} recs"
-                                        </span>
+                                {format!("{}", "→", info.output_count, " recs")}
+                            </span>
                                     </div>
                                 }
                             }).collect::<Html>()}
@@ -142,7 +142,7 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                         
                         <div class="inspectors">
                             <div class="inspector-box">
-                                <h3>{"Next Input"}</h3>
+                                <h3>{r#"Next Input"#}</h3>
                                 {if let Some(ref info) = state.debug_info.get(state.current_stage) {
                                     html! {
                                         <div class="inspector-content compact">
@@ -152,7 +152,7 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                                         </div>
                                     }
                                 } else {
-                                    html! {<span class="no-data">{"No input yet"}</span>}
+                                    html! {<span class="no-data">{r#"No input yet"#}</span>}
                                 }}
                             </div>
                             
@@ -161,11 +161,11 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                                 <div class="watches-list">
                                     <label>
                                         <input type="checkbox" checked={true} />
-                                        {"Watch: Stage inputs"}
+                                        {r#"Watch: Stage inputs"#}
                                     </label>
                                     <label>
                                         <input type="checkbox" checked={true} />
-                                        {"Watch: Stage outputs"}
+                                        {r#"Watch: Stage outputs"#}
                                     </label>
                                 </div>
                             </div>
@@ -185,10 +185,12 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                                 }}
                             </div>
                         </div>
+                        
                         </div>
-                    </div>
+                    
+                    <button class="expand-all-btn">
+                        {r#"Expand All Input/Output (Coming Soon)"#}
+                    </button>
                 </div>
-            }}
-        </div>
-    }
+            }
 }
