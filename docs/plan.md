@@ -62,66 +62,64 @@ This document outlines the implementation plan for pipelines-rs, broken into mil
 
 ---
 
-## Next Major Feature (Deferred)
+---
 
-### Milestone 3: Multi-Stream Processing
+## Next Major Feature: Multi-Stage Pipeline Specifications (NEW - CURRENT FOCUS)
 
-This milestone enables routing records to different subpipes based on selectors, with each subpipe potentially writing to different output files. This is the core feature that enables real mainframe-style batch processing patterns like master file updates.
+This milestone enables defining and running multiple interconnected pipelines in a single specification file, following CMS Pipelines pattern of using `?` as a pipeline separator. This provides a simpler, Unix/Linux-adapted approach focused on practical data processing workflows.
 
-#### Overview
+See [Multi-Stage Pipeline Design](multi-stage-pipes-design.md) for detailed design and implementation notes.
 
-Records from an input source can be routed to different processing paths based on field values:
+### Overview
 
-```
-PIPE CONSOLE
-| a: SPLIT 18,10                    # Split on department field
-|    = "SALES": sales_pipe          # Route SALES to subpipe
-|    = "ENGINEER": eng_pipe         # Route ENGINEER to subpipe
-|    OTHERWISE: other_pipe          # Route unmatched records
-?
+**Key Features:**
+- **Chained Pipelines**: Output of one pipeline becomes input to the next
+- **Independent Pipelines**: Write to intermediate files with FILE stage
+- **File I/O**: FILE source (read) and FILE sink (write) stages
+- **Unix-Style Stages**: SORT, SPLIT, UNIQ adapted for record-based processing
 
-# Subpipe definitions
-sales_pipe:
-| SELECT 0,8,0; 28,8,8
-| FILE sales-report.out
-?
+### Phases
 
-eng_pipe:
-| UPPER
-| FILE engineers.out
-?
+1. **Core Multi-Pipeline Parser**
+   - Parse ?-separated pipeline specifications
+   - Support chained execution (output→input)
+   - Support independent pipelines with FILE I/O
+   
+2. **File I/O Stages**
+   - FILE source stage (read from files)
+   - FILE sink stage (write to files)
+   - Working directory context for relative paths
+   
+3. **Unix-Style Stages (Basic Set)**
+   - SORT stage (field-based sorting)
+   - SPLIT stage (delimiter-based splitting)
+   - UNIQ stage (duplicate removal)
+   - Enhanced FILTER operators (>, <, CONTAINS, STARTSWITH)
+   
+4. **WASM UI Enhancements**
+   - Tutorial menu with submenus (single/multi/examples)
+   - Enhanced LOAD button (upload + canned examples)
+   - Input data file loading (.f80 files)
+   - Example library with commented production pipelines
+   
+5. **Demo Scripts**
+   - Multi-pipeline demo scripts
+   - Sample multi-stage .pipe files
 
-other_pipe:
-| FILE unmatched.out
-?
-```
-
-#### Prerequisites: Debugging Controls
-
-To implement and test multi-stream processing, we first need pipeline debugging controls:
-
-**Stage Inspection**:
-- [ ] Add stage-by-stage execution mode (step through pipeline)
-- [ ] Show intermediate results between stages
-- [ ] Track and display record counts at each stage
-- [ ] Highlight current stage in pipeline editor
-
-**Pipeline Controls**:
-- [ ] Reset pipeline to initial state
+### Tasks
 - [ ] Step forward one stage
 - [ ] Run to completion
 - [ ] Add breakpoints (pause at specific stage)
 
 **Inspector Panel UI**:
 ```
-[Input: 8 records]
+Input: 8 records
+Pipeline 1: Chained (3 stages)
     ↓
-[a: SPLIT] ─┬─> [sales_pipe: 3 records]
-            ├─> [eng_pipe: 3 records]
-            └─> [other_pipe: 2 records]
+Pipeline 2: Independent (2 stages)
 ```
 
-#### Labels for Stages
+### Tasks
 
 Add label syntax for referencing stages:
 
@@ -367,16 +365,67 @@ PIPE CONSOLE
 | Performance with large files | Low | Medium | Streaming design, external sort |
 | UI complexity with debug features | Medium | Medium | Progressive disclosure |
 
-## Quality Standards
+### Milestone 3: Multi-Stage Pipeline Specifications (NEW - CURRENT FOCUS)
+See [Multi-Stage Pipeline Design](multi-stage-pipes-design.md) for detailed design and implementation notes.
 
-All code must meet these criteria before merge:
-- All tests pass (`cargo test`)
-- Zero clippy warnings (`cargo clippy -- -D warnings`)
-- Formatted (`cargo fmt`)
-- Documented (public items)
-- User manual updated for new features
+### Overview
+- Chained pipelines (output feeds next input)
+- Independent pipelines with FILE I/O
+- File I/O: FILE source (read) and FILE sink (write) stages
+- Unix-style stages: SORT, SPLIT, UNIQ adapted for record-based processing
 
-## Related Documentation
+### Phases
+1. Core Multi-Pipeline Parser
+   - Parse ?-separated pipeline specifications
+   - Support chained execution (output→input)
+   - Support independent pipelines with FILE I/O
+   
+2. File I/O Stages
+   - FILE source stage (read from files)
+   - FILE sink stage (write to files)
+   - Working directory context for relative paths
+   
+3. Unix-Style Stages (Basic Set)
+   - SORT stage (field-based sorting, asc/desc)
+   - SPLIT stage (delimiter-based splitting)
+   - UNIQ stage (duplicate removal)
+   - Enhanced FILTER operators (>, <, CONTAINS, STARTSWITH)
+   
+4. WASM UI Enhancements
+   - Tutorial menu with submenus (single/multi/examples/canned)
+   - Enhanced LOAD button (upload + canned examples)
+   - Input data file loading (.f80 files)
+   - Example library with commented production pipelines
+   
+5. Demo Scripts
+   - Multi-pipeline demo scripts
+   - Sample multi-stage .pipe files
+
+### Tasks
+- [x] Core Multi-Pipeline Parser (parse ?-separated pipelines, implement chaining)
+- [x] File I/O stages (implement FILE source/sink)
+- [x] Unix-style stages (implement SORT, SPLIT, UNIQ)
+- [x] WASM UI enhancements (tutorial submenus, load examples, .f80 support)
+- [x] Demo scripts (create multi-pipeline examples)
+- [x] Documentation updates (user manual, examples)
+
+### Milestone 4: Visual Pipeline Debugger (Post-MVP)
+Add a visual debugger panel showing real-time pipeline execution:
+- Tabbed debugger view separate from main interface
+- Pipeline flow visualization with stage-by-stage execution
+- Stage controls (play, pause, reset, step-through)
+- Breakpoints at specific stages
+- Live record inspection at each stage
+- Record counts per stage
+
+### Milestone 5: Advanced Multi-Stage Features (Future)
+- SPLIT stage with conditional routing (match-based subpipes)
+- Conditional pipelines (IF...THEN...ELSE)
+- REFORMAT stage (like CMS REFORMAT)
+- LOOKUP stage (key-value matching)
+- Variable substitution in pipelines
+
+## Risk Register
 
 - [Architecture](architecture.md) - System design
 - [Product Requirements](prd.md) - Feature requirements

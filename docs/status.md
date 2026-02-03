@@ -18,22 +18,34 @@
 
 ### Current Phase
 
-**Phase**: CLI and Web UI Complete
+**Phase**: Multi-Stage Pipeline Specifications
+
+**Focus**: Implementing chained multi-pipelines with Unix/Linux record-oriented approach
 **Focus**: Demo scripts and pipeline execution
 
 ## Recent Activity
 
 ### 2026-02-02
+- [x] Created `multi-stage-pipes-design.md` document
+- [x] Updated PRD, plan, and status documents for multi-stage pipeline feature
+- [x] Added visual pipeline debugger to implementation roadmap
+- [x] Added Unix-style stages (SORT, SPLIT, UNIQ) to design
+- [x] Added tutorial submenus, .f80 file loading, and example library to plan
+- [x] Added enhanced LOAD button and input file upload to plan
 
-- [x] Implemented interactive tutorial system with auto-run mode
-- [x] Added Clear button and output clearing between tutorials
-- [x] Created DSL module in main library (moved from wasm-ui)
-- [x] Implemented `pipe-run` CLI binary for running .pipe files
-- [x] Created 23 demo scripts in `demos/` directory
-- [x] Created `demo-all.sh` to run all demos
-- [x] Sample outputs go to `work/sample-pipe-outputs/`
-- [x] Added input data file `specs/input-fixed-80.data`
-- [x] Added serve.sh redirect for localhost:9952 root
+### 2026-02-01
+- [x] Implemented core multi-pipeline parser in `src/dsl.rs`
+- [x] Added FILE source/sink stages to Command enum
+- [x] Added chained and independent pipeline execution models
+- [x] Implemented working directory path resolution
+- [x] Created new WASM tutorial examples for multi-pipelines
+
+### 2026-02-02 (Latest)
+**Focus**: Implementing chained multi-pipelines with Unix/Linux record-oriented approach
+
+This milestone enables defining and running multiple interconnected pipelines in a single specification file, following CMS Pipelines pattern of using `?` as a pipeline separator. This provides a simpler, Unix/Linux-adapted approach focused on practical data processing workflows.
+
+See [Multi-Stage Pipeline Design](multi-stage-pipes-design.md) for detailed design and implementation notes.
 
 ### 2026-02-01
 

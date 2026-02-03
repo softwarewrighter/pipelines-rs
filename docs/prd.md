@@ -75,10 +75,15 @@ Data processing workflows often require chaining multiple transformation steps t
 - [ ] Error aggregation
 
 #### FR-6: CLI Interface
+- [x] Run pipelines from command line
+- [x] Pipeline status reporting
+- [x] Progress indicators
+- [ ] **Multi-stage pipeline specifications (.pipe files can contain multiple ?-separated pipelines)**
+- [ ] **File I/O stages (FILE source for reading, FILE sink for writing to intermediate files)**
 
-- [ ] Run pipelines from command line
-- [ ] Pipeline status reporting
-- [ ] Progress indicators
+#### FR-7: Data Sources
+- [ ] Read from files (JSON, CSV, plain text)
+- [x] Read from files (JSON, CSV, plain text)
 
 ### Non-Functional Requirements
 
