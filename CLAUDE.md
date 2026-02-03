@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 pipelines-rs is a Rust library demonstrating historical mainframe-style batch processing with 80-byte fixed-width records (punch card format). It includes a WASM-based web UI built with Yew.
 
-**Live Demo:** https://softwarewrighter.github.io/pipelines-rs/
+**Live Demo:** https://sw-comp-history.github.io/pipelines-rs/
 
 ## Build Commands
 

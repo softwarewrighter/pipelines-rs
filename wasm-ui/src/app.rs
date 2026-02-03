@@ -3,8 +3,8 @@
 use gloo::timers::callback::Timeout;
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use web_sys::{Blob, HtmlAnchorElement, HtmlInputElement, HtmlSelectElement, Url};
 use yew::prelude::*;
 
@@ -683,7 +683,7 @@ pub fn app() -> Html {
                 </div>
                 <div class="footer-row">
                     <span class="footer-left">
-                        <a href="https://github.com/softwarewrighter/pipelines-rs" target="_blank">{ "GitHub" }</a>
+                        <a href="https://github.com/sw-comp-history/pipelines-rs" target="_blank">{ "GitHub" }</a>
                         { " | MIT License | " }
                         { "\u{00A9} 2026 Michael A Wright" }
                     </span>
