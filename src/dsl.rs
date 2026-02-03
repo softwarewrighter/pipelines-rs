@@ -14,10 +14,16 @@
 //! - `| CONSOLE` writes to output
 //! - `?` on its own line marks end of pipeline
 //!
+//! Stage position rules:
+//! - First stage must be a source: CONSOLE, LITERAL, or HOLE
+//! - Any stage can be in the middle (CONSOLE passes through while printing)
+//! - Any stage can be last (output discarded if not a sink like CONSOLE)
+//!
 //! Supported stages:
-//! - `CONSOLE` - Read from input (first) or write to output (last)
+//! - `CONSOLE` - Read from input (first), pass through (middle), or write to output (last)
 //! - `FILTER pos,len = "value"` - Keep records where field equals value
 //! - `FILTER pos,len != "value"` - Omit records where field equals value
+//! - `HOLE` - Discard all input, output nothing (like /dev/null)
 //! - `SELECT p1,l1,d1; p2,l2,d2; ...` - Select and reposition fields
 //! - `TAKE n` - Keep first n records
 //! - `SKIP n` - Skip first n records
@@ -50,38 +56,22 @@ pub fn execute_pipeline(
         return Err("Pipeline is empty".to_string());
     }
 
+    // Need at least 2 stages (source and something to receive output)
+    if commands.len() < 2 {
+        return Err("Pipeline must have at least 2 stages".to_string());
+    }
+
     // Check first stage can be first (source)
     let first = commands.first().unwrap();
     if !first.can_be_first() {
         return Err(format!(
-            "{} cannot be the first stage (try CONSOLE or LITERAL)",
+            "{} cannot be the first stage (try CONSOLE, LITERAL, or HOLE)",
             first.name()
         ));
     }
 
-    // Check last stage can be last (sink)
-    let last = commands.last().unwrap();
-    if !last.can_be_last() {
-        return Err(format!(
-            "{} cannot be the last stage (try CONSOLE)",
-            last.name()
-        ));
-    }
-
-    // Need at least 2 stages (source and sink)
-    if commands.len() < 2 {
-        return Err("Pipeline must have at least a source and sink stage".to_string());
-    }
-
-    // Check middle stages can be in middle
-    for cmd in &commands[1..commands.len() - 1] {
-        if !cmd.can_be_middle() {
-            return Err(format!(
-                "{} cannot be in the middle of a pipeline",
-                cmd.name()
-            ));
-        }
-    }
+    // Any stage can be last - if not a sink, output is simply discarded
+    // Any stage can be in the middle - CONSOLE passes through while printing
 
     // Get initial records based on first stage type
     let input_records: Vec<Record> = match first {
@@ -97,6 +87,10 @@ pub fn execute_pipeline(
             // LITERAL generates a single record
             vec![Record::from_str(text)]
         }
+        Command::Hole => {
+            // HOLE generates an empty stream
+            vec![]
+        }
         _ => {
             // Other can_be_first stages would be handled here
             return Err(format!("Unhandled source stage: {}", first.name()));
@@ -105,9 +99,10 @@ pub fn execute_pipeline(
 
     let input_count = input_records.len();
 
-    // Apply middle commands (skip first source and last sink)
-    let middle_commands = &commands[1..commands.len() - 1];
-    let output_records = apply_commands(input_records, middle_commands)?;
+    // Apply all commands after the first (source)
+    // Any stage can be last - it transforms and the result is output
+    let remaining_commands = &commands[1..];
+    let output_records = apply_commands(input_records, remaining_commands)?;
 
     let output_count = output_records.len();
 
@@ -170,27 +165,19 @@ enum Command {
     Reverse,
     /// DUPLICATE n - repeat each record n times
     Duplicate { n: usize },
+    /// HOLE - discard all input, output nothing (like /dev/null)
+    Hole,
 }
 
 impl Command {
     /// Can this stage be the first stage in a pipeline (source)?
     /// Sources generate or read records without needing upstream input.
     fn can_be_first(&self) -> bool {
-        matches!(self, Command::Console | Command::Literal { .. })
-    }
-
-    /// Can this stage be the last stage in a pipeline (sink)?
-    /// Sinks consume records without passing them downstream.
-    fn can_be_last(&self) -> bool {
-        matches!(self, Command::Console)
-    }
-
-    /// Can this stage be in the middle of a pipeline (filter)?
-    /// Filters transform records, requiring both upstream and downstream.
-    fn can_be_middle(&self) -> bool {
-        // CONSOLE cannot be in middle - it's only a source or sink
-        // LITERAL can be in middle - it appends its record after all upstream records
-        !matches!(self, Command::Console)
+        // CONSOLE reads from input, LITERAL generates a record, HOLE generates empty stream
+        matches!(
+            self,
+            Command::Console | Command::Literal { .. } | Command::Hole
+        )
     }
 
     /// Get the stage name for error messages.
@@ -210,6 +197,7 @@ impl Command {
             Command::Lower => "LOWER",
             Command::Reverse => "REVERSE",
             Command::Duplicate { .. } => "DUPLICATE",
+            Command::Hole => "HOLE",
         }
     }
 }
@@ -293,6 +281,8 @@ fn parse_command(line: &str) -> Result<Command, String> {
         Ok(Command::Reverse)
     } else if upper.starts_with("DUPLICATE") {
         parse_duplicate(line)
+    } else if upper == "HOLE" || upper.starts_with("HOLE ") {
+        Ok(Command::Hole)
     } else {
         Err(format!(
             "Unknown command: {}",
@@ -685,6 +675,12 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
                 .flat_map(|r| std::iter::repeat_n(r, n))
                 .collect())
         }
+        Command::Hole => {
+            // Discard all input records, output nothing (like /dev/null)
+            // Consume records but produce empty output
+            drop(records);
+            Ok(vec![])
+        }
     }
 }
 
@@ -763,16 +759,25 @@ mod tests {
     }
 
     #[test]
-    fn test_pipeline_requires_console() {
+    fn test_pipeline_requires_source_first() {
         let input = "SMITH   JOHN      SALES     00050000";
 
-        // Missing starting CONSOLE
-        let result = execute_pipeline(input, r#"FILTER 18,10 = "SALES" | CONSOLE"#);
+        // FILTER cannot be first stage
+        let pipeline = r#"PIPE FILTER 18,10 = "SALES"
+| CONSOLE"#;
+        let result = execute_pipeline(input, pipeline);
         assert!(result.is_err());
+        assert!(result.unwrap_err().contains("FILTER cannot be the first stage"));
+    }
 
-        // Missing ending CONSOLE
-        let result = execute_pipeline(input, r#"CONSOLE | FILTER 18,10 = "SALES""#);
-        assert!(result.is_err());
+    #[test]
+    fn test_any_stage_can_be_last_filter() {
+        // FILTER as last stage - output is discarded
+        let pipeline = r#"PIPE CONSOLE
+| FILTER 18,10 = "SALES""#;
+        let result = execute_pipeline("SMITH   JOHN      SALES     00050000", pipeline);
+        // Should succeed - output just discarded
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -849,23 +854,61 @@ DOE     JANE      SALES     00060000";
     }
 
     #[test]
-    fn test_literal_cannot_be_last() {
+    fn test_any_stage_can_be_last() {
+        // Output is discarded if last stage isn't a sink
         let pipeline = r#"PIPE CONSOLE
 | LITERAL "END""#;
         let result = execute_pipeline("test", pipeline);
-        assert!(result.is_err(), "Expected error but got: {:?}", result);
-        let err = result.unwrap_err();
-        assert!(err.contains("LITERAL cannot be the last stage"), "Got: {}", err);
+        // Should succeed - LITERAL as last just means output is discarded
+        assert!(result.is_ok(), "Expected success but got: {:?}", result);
     }
 
     #[test]
-    fn test_console_cannot_be_middle() {
+    fn test_console_in_middle() {
+        // CONSOLE in middle passes through (useful for debugging)
         let pipeline = r#"PIPE CONSOLE
 | CONSOLE
 | CONSOLE"#;
-        let result = execute_pipeline("test", pipeline);
-        assert!(result.is_err(), "Expected error but got: {:?}", result);
-        let err = result.unwrap_err();
-        assert!(err.contains("CONSOLE cannot be in the middle"), "Got: {}", err);
+        let (output, input_count, output_count) = execute_pipeline("test", pipeline).unwrap();
+        assert_eq!(input_count, 1);
+        assert_eq!(output_count, 1);
+        assert_eq!(output, "test");
+    }
+
+    #[test]
+    fn test_hole_as_first() {
+        // HOLE as first generates empty stream
+        let pipeline = r#"PIPE HOLE
+| LITERAL "No input"
+| CONSOLE"#;
+        let (output, input_count, output_count) = execute_pipeline("ignored", pipeline).unwrap();
+        assert_eq!(input_count, 0); // HOLE generates 0 records
+        assert_eq!(output_count, 1); // LITERAL adds 1
+        assert_eq!(output, "No input");
+    }
+
+    #[test]
+    fn test_hole_in_middle() {
+        // HOLE discards upstream, downstream gets nothing (before LITERAL)
+        let pipeline = r#"PIPE CONSOLE
+| COUNT
+| HOLE
+| LITERAL "Discarded"
+| CONSOLE"#;
+        let (output, input_count, output_count) = execute_pipeline("A\nB\nC", pipeline).unwrap();
+        assert_eq!(input_count, 3);
+        assert_eq!(output_count, 1);
+        assert_eq!(output, "Discarded");
+    }
+
+    #[test]
+    fn test_hole_as_last() {
+        // HOLE as last discards all output
+        let pipeline = r#"PIPE CONSOLE
+| HOLE"#;
+        let (output, input_count, output_count) = execute_pipeline("test", pipeline).unwrap();
+        assert_eq!(input_count, 1); // CONSOLE read 1 record
+        assert_eq!(output_count, 0); // HOLE discarded it
+        assert!(output.is_empty());
     }
 }

@@ -149,10 +149,12 @@ pub fn pipeline_panel(props: &PipelinePanelProps) -> Html {
 # comment                  - Comments ignored
 
 CHANGE "old" "new"         - Replace text in records
+CONSOLE                    - Pass through (middle), debug output
 COUNT                      - Output record count
 DUPLICATE n                - Repeat each record n times
 FILTER pos,len = "v"       - Keep matching records
 FILTER pos,len != "v"      - Omit matching records
+HOLE                       - Discard all input (like /dev/null)
 LITERAL "text"             - Append literal record
 LOCATE "pattern"           - Keep records containing pattern
 LOCATE pos,len "pattern"   - Keep if field contains pattern

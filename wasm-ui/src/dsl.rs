@@ -50,38 +50,22 @@ pub fn execute_pipeline(
         return Err("Pipeline is empty".to_string());
     }
 
+    // Need at least 2 stages (source and something to receive output)
+    if commands.len() < 2 {
+        return Err("Pipeline must have at least 2 stages".to_string());
+    }
+
     // Check first stage can be first (source)
     let first = commands.first().unwrap();
     if !first.can_be_first() {
         return Err(format!(
-            "{} cannot be the first stage (try CONSOLE or LITERAL)",
+            "{} cannot be the first stage (try CONSOLE, LITERAL, or HOLE)",
             first.name()
         ));
     }
 
-    // Check last stage can be last (sink)
-    let last = commands.last().unwrap();
-    if !last.can_be_last() {
-        return Err(format!(
-            "{} cannot be the last stage (try CONSOLE)",
-            last.name()
-        ));
-    }
-
-    // Need at least 2 stages (source and sink)
-    if commands.len() < 2 {
-        return Err("Pipeline must have at least a source and sink stage".to_string());
-    }
-
-    // Check middle stages can be in middle
-    for cmd in &commands[1..commands.len() - 1] {
-        if !cmd.can_be_middle() {
-            return Err(format!(
-                "{} cannot be in the middle of a pipeline",
-                cmd.name()
-            ));
-        }
-    }
+    // Any stage can be last - if not a sink, output is simply discarded
+    // Any stage can be in the middle - CONSOLE passes through while printing
 
     // Get initial records based on first stage type
     let input_records: Vec<Record> = match first {
@@ -97,6 +81,10 @@ pub fn execute_pipeline(
             // LITERAL generates a single record
             vec![Record::from_str(text)]
         }
+        Command::Hole => {
+            // HOLE generates an empty stream
+            vec![]
+        }
         _ => {
             // Other can_be_first stages would be handled here
             return Err(format!("Unhandled source stage: {}", first.name()));
@@ -105,9 +93,10 @@ pub fn execute_pipeline(
 
     let input_count = input_records.len();
 
-    // Apply middle commands (skip first source and last sink)
-    let middle_commands = &commands[1..commands.len() - 1];
-    let output_records = apply_commands(input_records, middle_commands)?;
+    // Apply all commands after the first (source)
+    // Any stage can be last - it transforms and the result is output
+    let remaining_commands = &commands[1..];
+    let output_records = apply_commands(input_records, remaining_commands)?;
 
     let output_count = output_records.len();
 
@@ -170,27 +159,19 @@ enum Command {
     Reverse,
     /// DUPLICATE n - repeat each record n times
     Duplicate { n: usize },
+    /// HOLE - discard all input, output nothing (like /dev/null)
+    Hole,
 }
 
 impl Command {
     /// Can this stage be the first stage in a pipeline (source)?
     /// Sources generate or read records without needing upstream input.
     fn can_be_first(&self) -> bool {
-        matches!(self, Command::Console | Command::Literal { .. })
-    }
-
-    /// Can this stage be the last stage in a pipeline (sink)?
-    /// Sinks consume records without passing them downstream.
-    fn can_be_last(&self) -> bool {
-        matches!(self, Command::Console)
-    }
-
-    /// Can this stage be in the middle of a pipeline (filter)?
-    /// Filters transform records, requiring both upstream and downstream.
-    fn can_be_middle(&self) -> bool {
-        // CONSOLE cannot be in middle - it's only a source or sink
-        // LITERAL can be in middle - it appends its record after all upstream records
-        !matches!(self, Command::Console)
+        // CONSOLE reads from input, LITERAL generates a record, HOLE generates empty stream
+        matches!(
+            self,
+            Command::Console | Command::Literal { .. } | Command::Hole
+        )
     }
 
     /// Get the stage name for error messages.
@@ -210,6 +191,7 @@ impl Command {
             Command::Lower => "LOWER",
             Command::Reverse => "REVERSE",
             Command::Duplicate { .. } => "DUPLICATE",
+            Command::Hole => "HOLE",
         }
     }
 }
@@ -293,6 +275,8 @@ fn parse_command(line: &str) -> Result<Command, String> {
         Ok(Command::Reverse)
     } else if upper.starts_with("DUPLICATE") {
         parse_duplicate(line)
+    } else if upper == "HOLE" || upper.starts_with("HOLE ") {
+        Ok(Command::Hole)
     } else {
         Err(format!(
             "Unknown command: {}",
@@ -684,6 +668,12 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
                 .into_iter()
                 .flat_map(|r| std::iter::repeat(r).take(n))
                 .collect())
+        }
+        Command::Hole => {
+            // Discard all input records, output nothing (like /dev/null)
+            // Consume records but produce empty output
+            drop(records);
+            Ok(vec![])
         }
     }
 }

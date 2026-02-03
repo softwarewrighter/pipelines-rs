@@ -119,11 +119,13 @@ Reads from or writes to the console (Input/Output Records panels).
 
 **Usage**:
 - First stage: Reads records from Input Records panel
+- Middle stage: Passes records through (useful for debugging - conceptually prints while passing)
 - Last stage: Writes records to Output Records panel
 
 ```
 PIPE CONSOLE      # Read input
-| ...
+| CONSOLE         # Debug: see intermediate results
+| FILTER ...
 | CONSOLE         # Write output
 ?
 ```
@@ -185,6 +187,37 @@ FILTER pos,len != "value"   # Keep records where field does NOT equal value
 ```
 FILTER 18,10 = "SALES"      # Keep records with "SALES" at columns 18-27
 FILTER 0,8 != "SMITH"       # Remove records with "SMITH" at columns 0-7
+```
+
+#### HOLE
+
+Discards all input records and outputs nothing (like /dev/null).
+
+**Syntax**:
+```
+HOLE
+```
+
+**Usage**:
+- First stage: Generates an empty stream (no records)
+- Middle stage: Discards all upstream records, passes nothing downstream
+- Last stage: Discards all output (like writing to /dev/null)
+
+**Examples**:
+```
+# Discard input, output a message instead
+PIPE CONSOLE
+| COUNT
+| HOLE
+| LITERAL "Input discarded"
+| CONSOLE
+?
+
+# Start with empty stream
+PIPE HOLE
+| LITERAL "No input needed"
+| CONSOLE
+?
 ```
 
 #### LITERAL
