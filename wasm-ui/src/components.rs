@@ -148,18 +148,18 @@ pub fn pipeline_panel(props: &PipelinePanelProps) -> Html {
 ?                          - End of pipeline
 # comment                  - Comments ignored
 
-CHANGE "old" "new"         - Replace text in records
+CHANGE /old/new/           - Replace text (any delimiter)
 CONSOLE                    - Pass through (middle), debug output
 COUNT                      - Output record count
 DUPLICATE n                - Repeat each record n times
 FILTER pos,len = "v"       - Keep matching records
 FILTER pos,len != "v"      - Omit matching records
 HOLE                       - Discard all input (like /dev/null)
-LITERAL "text"             - Append literal record
-LOCATE "pattern"           - Keep records containing pattern
-LOCATE pos,len "pattern"   - Keep if field contains pattern
+LITERAL text               - Prefix literal record
+LOCATE /pattern/           - Keep records containing pattern
+LOCATE pos,len /pattern/   - Keep if field contains pattern
 LOWER                      - Convert to lowercase
-NLOCATE "pattern"          - Keep records NOT containing pattern
+NLOCATE /pattern/          - Keep records NOT containing pattern
 REVERSE                    - Reverse characters in record
 SELECT p,l,d; p,l,d        - Select fields (src,len,dest)
 SKIP n                     - Skip first n records

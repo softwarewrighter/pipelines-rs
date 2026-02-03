@@ -392,148 +392,163 @@ fn parse_skip(line: &str) -> Result<Command, String> {
     Ok(Command::Skip { n })
 }
 
-/// Parse a quoted string value.
-fn parse_quoted_string(s: &str) -> Result<String, String> {
-    let s = s.trim();
-    if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
-        Ok(s[1..s.len() - 1].to_string())
-    } else if s.starts_with('/') && s.ends_with('/') && s.len() >= 2 {
-        // Also accept /pattern/ delimiters (CMS style)
-        Ok(s[1..s.len() - 1].to_string())
+/// Parse a delimited string using CMS Pipelines convention.
+/// The first non-blank character is the delimiter, and the string
+/// continues until the next occurrence of that delimiter.
+/// Returns (extracted_string, rest_of_input).
+fn parse_delimited_string(s: &str) -> Result<(String, &str), String> {
+    let s = s.trim_start();
+    if s.is_empty() {
+        return Err("Expected delimited string".to_string());
+    }
+
+    // First character is the delimiter
+    let delim = s.chars().next().unwrap();
+    let after_delim = &s[delim.len_utf8()..];
+
+    // Find the closing delimiter
+    if let Some(end) = after_delim.find(delim) {
+        let extracted = after_delim[..end].to_string();
+        let rest = &after_delim[end + delim.len_utf8()..];
+        Ok((extracted, rest))
     } else {
-        Err(format!("Value must be quoted: {}", s))
+        Err(format!("Unclosed delimiter '{}'", delim))
     }
 }
 
+/// Parse a quoted string value (legacy helper, delegates to parse_delimited_string).
+fn parse_quoted_string(s: &str) -> Result<String, String> {
+    let (result, _) = parse_delimited_string(s)?;
+    Ok(result)
+}
+
 /// Parse LOCATE command.
+/// CMS Pipelines: Uses first non-blank char as delimiter.
 /// Formats:
-///   LOCATE "pattern"      - search entire record
-///   LOCATE /pattern/      - search entire record (CMS style)
-///   LOCATE pos,len "pattern" - search specific field
+///   LOCATE /pattern/       - search entire record (/ is delimiter)
+///   LOCATE "pattern"       - search entire record (" is delimiter)
+///   LOCATE .pattern.       - search entire record (. is delimiter)
+///   LOCATE pos,len /pattern/ - search specific field
 fn parse_locate(line: &str) -> Result<Command, String> {
     let rest = line[6..].trim(); // Skip "LOCATE"
 
-    // Check if there's a field spec before the pattern
-    // Field spec is pos,len followed by quoted string
-    if let Some(quote_start) = rest.find('"').or_else(|| rest.find('/')) {
-        let before_quote = rest[..quote_start].trim();
+    if rest.is_empty() {
+        return Err("LOCATE requires a pattern".to_string());
+    }
 
-        if before_quote.is_empty() {
-            // Just LOCATE "pattern"
-            let pattern = parse_quoted_string(rest)?;
-            Ok(Command::Locate {
-                pattern,
-                field: None,
-            })
-        } else {
-            // LOCATE pos,len "pattern"
-            let parts: Vec<&str> = before_quote.split(',').collect();
-            if parts.len() != 2 {
-                return Err("LOCATE field spec requires pos,len".to_string());
-            }
+    // If first char is a digit, parse field spec first
+    if rest.chars().next().unwrap().is_ascii_digit() {
+        // Find where the field spec ends (after the comma and second number)
+        // Format: pos,len <delimited-pattern>
+        let mut parts = rest.splitn(2, |c: char| !c.is_ascii_digit() && c != ',');
+        let field_spec = parts.next().unwrap_or("");
+        let pattern_part = parts.next().unwrap_or("").trim_start();
 
-            let pos: usize = parts[0]
-                .trim()
-                .parse()
-                .map_err(|_| "Invalid position number")?;
-            let len: usize = parts[1]
-                .trim()
-                .parse()
-                .map_err(|_| "Invalid length number")?;
-
-            let pattern = parse_quoted_string(&rest[quote_start..])?;
-            Ok(Command::Locate {
-                pattern,
-                field: Some((pos, len)),
-            })
+        let field_parts: Vec<&str> = field_spec.split(',').collect();
+        if field_parts.len() != 2 {
+            return Err("LOCATE field spec requires pos,len".to_string());
         }
+
+        let pos: usize = field_parts[0]
+            .trim()
+            .parse()
+            .map_err(|_| "Invalid position number")?;
+        let len: usize = field_parts[1]
+            .trim()
+            .parse()
+            .map_err(|_| "Invalid length number")?;
+
+        let (pattern, _) = parse_delimited_string(pattern_part)?;
+        Ok(Command::Locate {
+            pattern,
+            field: Some((pos, len)),
+        })
     } else {
-        Err("LOCATE requires a quoted pattern".to_string())
+        // No field spec, just the delimited pattern
+        let (pattern, _) = parse_delimited_string(rest)?;
+        Ok(Command::Locate {
+            pattern,
+            field: None,
+        })
     }
 }
 
 /// Parse NLOCATE command.
+/// CMS Pipelines: Uses first non-blank char as delimiter (same as LOCATE).
 fn parse_nlocate(line: &str) -> Result<Command, String> {
     let rest = line[7..].trim(); // Skip "NLOCATE"
 
-    // Check if there's a field spec before the pattern
-    if let Some(quote_start) = rest.find('"').or_else(|| rest.find('/')) {
-        let before_quote = rest[..quote_start].trim();
+    if rest.is_empty() {
+        return Err("NLOCATE requires a pattern".to_string());
+    }
 
-        if before_quote.is_empty() {
-            let pattern = parse_quoted_string(rest)?;
-            Ok(Command::Nlocate {
-                pattern,
-                field: None,
-            })
-        } else {
-            let parts: Vec<&str> = before_quote.split(',').collect();
-            if parts.len() != 2 {
-                return Err("NLOCATE field spec requires pos,len".to_string());
-            }
+    // If first char is a digit, parse field spec first
+    if rest.chars().next().unwrap().is_ascii_digit() {
+        let mut parts = rest.splitn(2, |c: char| !c.is_ascii_digit() && c != ',');
+        let field_spec = parts.next().unwrap_or("");
+        let pattern_part = parts.next().unwrap_or("").trim_start();
 
-            let pos: usize = parts[0]
-                .trim()
-                .parse()
-                .map_err(|_| "Invalid position number")?;
-            let len: usize = parts[1]
-                .trim()
-                .parse()
-                .map_err(|_| "Invalid length number")?;
-
-            let pattern = parse_quoted_string(&rest[quote_start..])?;
-            Ok(Command::Nlocate {
-                pattern,
-                field: Some((pos, len)),
-            })
+        let field_parts: Vec<&str> = field_spec.split(',').collect();
+        if field_parts.len() != 2 {
+            return Err("NLOCATE field spec requires pos,len".to_string());
         }
+
+        let pos: usize = field_parts[0]
+            .trim()
+            .parse()
+            .map_err(|_| "Invalid position number")?;
+        let len: usize = field_parts[1]
+            .trim()
+            .parse()
+            .map_err(|_| "Invalid length number")?;
+
+        let (pattern, _) = parse_delimited_string(pattern_part)?;
+        Ok(Command::Nlocate {
+            pattern,
+            field: Some((pos, len)),
+        })
     } else {
-        Err("NLOCATE requires a quoted pattern".to_string())
+        let (pattern, _) = parse_delimited_string(rest)?;
+        Ok(Command::Nlocate {
+            pattern,
+            field: None,
+        })
     }
 }
 
 /// Parse CHANGE command.
-/// Format: CHANGE "old" "new" or CHANGE /old/ /new/
+/// CMS Pipelines: Uses first non-blank char as delimiter.
+/// Both strings must use the SAME delimiter.
+/// Format: CHANGE /old/ /new/ or CHANGE "old" "new"
 fn parse_change(line: &str) -> Result<Command, String> {
     let rest = line[6..].trim(); // Skip "CHANGE"
 
-    // Find the two quoted strings
-    // First, find the delimiter (either " or /)
-    let delim = if rest.starts_with('"') {
-        '"'
-    } else if rest.starts_with('/') {
-        '/'
-    } else {
-        return Err("CHANGE requires two quoted strings".to_string());
-    };
-
-    // Parse first quoted string
-    let after_first_delim = &rest[1..];
-    let end_first = after_first_delim
-        .find(delim)
-        .ok_or("CHANGE: unclosed first string")?;
-    let old = after_first_delim[..end_first].to_string();
-
-    // Find second quoted string
-    let after_first = after_first_delim[end_first + 1..].trim();
-    if !after_first.starts_with(delim) {
-        return Err("CHANGE requires two quoted strings".to_string());
+    if rest.is_empty() {
+        return Err("CHANGE requires two delimited strings".to_string());
     }
 
-    let after_second_delim = &after_first[1..];
-    let end_second = after_second_delim
-        .find(delim)
-        .ok_or("CHANGE: unclosed second string")?;
-    let new = after_second_delim[..end_second].to_string();
+    // Parse first delimited string
+    let (old, after_first) = parse_delimited_string(rest)?;
+
+    // Parse second delimited string (must use same delimiter as first)
+    let (new, _) = parse_delimited_string(after_first)?;
 
     Ok(Command::Change { old, new })
 }
 
 /// Parse LITERAL command.
-/// Format: LITERAL "text" or LITERAL /text/
+/// CMS Pipelines: LITERAL does NOT use delimiters.
+/// Everything after "LITERAL " is the literal text.
+/// LITERAL FOO    -> "FOO"
+/// LITERAL "FOO"  -> "\"FOO\"" (quotes are part of text)
+/// LITERAL /FOO/  -> "/FOO/"  (slashes are part of text)
 fn parse_literal(line: &str) -> Result<Command, String> {
-    let rest = line[7..].trim(); // Skip "LITERAL"
-    let text = parse_quoted_string(rest)?;
+    let rest = line[7..].trim_start(); // Skip "LITERAL", keep leading spaces in text
+    if rest.is_empty() {
+        return Err("LITERAL requires text".to_string());
+    }
+    // Trim trailing whitespace from the text
+    let text = rest.trim_end().to_string();
     Ok(Command::Literal { text })
 }
 
@@ -641,9 +656,10 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
                 .collect())
         }
         Command::Literal { text } => {
-            // Append a literal record to the stream
-            let mut result = records;
-            result.push(Record::from_str(text));
+            // CMS Pipelines: LITERAL is a "prefix" filter.
+            // It outputs its literal text FIRST, then passes through all input records.
+            let mut result = vec![Record::from_str(text)];
+            result.extend(records);
             Ok(result)
         }
         Command::Upper => {
@@ -819,7 +835,8 @@ DOE     JANE      SALES     00060000";
     #[test]
     fn test_literal_as_first_stage() {
         // LITERAL can be the first stage, generating a single record
-        let pipeline = r#"PIPE LITERAL "HELLO, WORLD"
+        // CMS-style: no delimiters, everything after LITERAL is the text
+        let pipeline = r#"PIPE LITERAL HELLO, WORLD
 | CONSOLE
 ?"#;
 
@@ -832,7 +849,8 @@ DOE     JANE      SALES     00060000";
 
     #[test]
     fn test_literal_first_with_middle_stages() {
-        let pipeline = r#"PIPE LITERAL "hello world"
+        // CMS-style: no delimiters
+        let pipeline = r#"PIPE LITERAL hello world
 | UPPER
 | CONSOLE
 ?"#;
@@ -856,8 +874,9 @@ DOE     JANE      SALES     00060000";
     #[test]
     fn test_any_stage_can_be_last() {
         // Output is discarded if last stage isn't a sink
+        // CMS-style: LITERAL without delimiters
         let pipeline = r#"PIPE CONSOLE
-| LITERAL "END""#;
+| LITERAL END"#;
         let result = execute_pipeline("test", pipeline);
         // Should succeed - LITERAL as last just means output is discarded
         assert!(result.is_ok(), "Expected success but got: {:?}", result);
@@ -878,8 +897,9 @@ DOE     JANE      SALES     00060000";
     #[test]
     fn test_hole_as_first() {
         // HOLE as first generates empty stream
+        // CMS-style: LITERAL without delimiters
         let pipeline = r#"PIPE HOLE
-| LITERAL "No input"
+| LITERAL No input
 | CONSOLE"#;
         let (output, input_count, output_count) = execute_pipeline("ignored", pipeline).unwrap();
         assert_eq!(input_count, 0); // HOLE generates 0 records
@@ -890,10 +910,11 @@ DOE     JANE      SALES     00060000";
     #[test]
     fn test_hole_in_middle() {
         // HOLE discards upstream, downstream gets nothing (before LITERAL)
+        // CMS-style: LITERAL without delimiters
         let pipeline = r#"PIPE CONSOLE
 | COUNT
 | HOLE
-| LITERAL "Discarded"
+| LITERAL Discarded
 | CONSOLE"#;
         let (output, input_count, output_count) = execute_pipeline("A\nB\nC", pipeline).unwrap();
         assert_eq!(input_count, 3);

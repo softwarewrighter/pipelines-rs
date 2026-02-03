@@ -100,8 +100,10 @@ Replaces text in records (like sed).
 
 **Syntax**:
 ```
-CHANGE "old" "new"
+CHANGE /old/new/
 ```
+
+The first non-blank character after CHANGE is the delimiter. Any character works.
 
 **Parameters**:
 - `old` - Text to find
@@ -109,8 +111,9 @@ CHANGE "old" "new"
 
 **Examples**:
 ```
-CHANGE "SALES" "MKTG"       # Replace SALES with MKTG
-CHANGE "ERROR: " ""         # Remove "ERROR: " prefix
+CHANGE /SALES/MKTG/         # Replace SALES with MKTG
+CHANGE /ERROR: //           # Remove "ERROR: " prefix
+CHANGE "old"new"            # Using " as delimiter
 ```
 
 #### CONSOLE
@@ -203,38 +206,48 @@ HOLE
 - Middle stage: Discards all upstream records, passes nothing downstream
 - Last stage: Discards all output (like writing to /dev/null)
 
+**Note**: HOLE as a first stage may differ from CMS PIPELINES behavior in edge cases.
+For a no-op pipeline, `PIPE LITERAL x | HOLE ?` is more idiomatic.
+
 **Examples**:
 ```
 # Discard input, output a message instead
 PIPE CONSOLE
 | COUNT
 | HOLE
-| LITERAL "Input discarded"
+| LITERAL Input discarded
 | CONSOLE
 ?
 
 # Start with empty stream
 PIPE HOLE
-| LITERAL "No input needed"
+| LITERAL No input needed
 | CONSOLE
 ?
 ```
 
 #### LITERAL
 
-Appends a literal text record to the stream.
+Outputs a literal text record, then passes through all input records.
 
 **Syntax**:
 ```
-LITERAL "text"
+LITERAL text
 ```
+
+Everything after `LITERAL ` (including spaces) becomes the literal text. No delimiters needed.
 
 **Parameter**:
 - `text` - The literal text to add as a record
 
+**Behavior**:
+- First stage: Outputs the literal, then nothing (no input to pass)
+- Middle stage: Outputs the literal FIRST, then passes all input records through
+- Last stage: Same as middle, but output goes nowhere
+
 **Example**:
 ```
-LITERAL "--- END OF REPORT ---"   # Add footer record
+LITERAL --- END OF REPORT ---   # Add header/prefix record
 ```
 
 #### LOCATE
@@ -243,9 +256,11 @@ Keeps records containing a pattern (like grep).
 
 **Syntax**:
 ```
-LOCATE "pattern"              # Search entire record
-LOCATE pos,len "pattern"      # Search specific field only
+LOCATE /pattern/              # Search entire record
+LOCATE pos,len /pattern/      # Search specific field only
 ```
+
+The first non-blank character after LOCATE (or after pos,len) is the delimiter. Any character works.
 
 **Parameters**:
 - `pattern` - Text to search for
@@ -253,8 +268,9 @@ LOCATE pos,len "pattern"      # Search specific field only
 
 **Examples**:
 ```
-LOCATE "ERROR"                # Keep records containing ERROR
-LOCATE 18,10 "SALES"          # Keep if field at 18,10 contains SALES
+LOCATE /ERROR/                # Keep records containing ERROR
+LOCATE 18,10 /SALES/          # Keep if field at 18,10 contains SALES
+LOCATE "has quotes"           # Using " as delimiter
 ```
 
 #### LOWER
@@ -277,14 +293,16 @@ Keeps records NOT containing a pattern (inverse of LOCATE).
 
 **Syntax**:
 ```
-NLOCATE "pattern"             # Search entire record
-NLOCATE pos,len "pattern"     # Search specific field only
+NLOCATE /pattern/             # Search entire record
+NLOCATE pos,len /pattern/     # Search specific field only
 ```
+
+The first non-blank character after NLOCATE (or after pos,len) is the delimiter. Any character works.
 
 **Examples**:
 ```
-NLOCATE "ERROR"               # Keep records without ERROR
-NLOCATE 18,10 "SALES"         # Keep if field doesn't contain SALES
+NLOCATE /ERROR/               # Keep records without ERROR
+NLOCATE 18,10 /SALES/         # Keep if field doesn't contain SALES
 ```
 
 #### REVERSE

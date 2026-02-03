@@ -50,11 +50,11 @@ const TUTORIALS: &[TutorialStep] = &[
         description: "Welcome to pipelines-rs!\n\n\
             PIPE starts the pipeline. Instead of CONSOLE (which reads input),\n\
             we use LITERAL to inject a fixed record.\n\n\
-            LITERAL \"text\" creates a record with the given text.\n\
+            LITERAL text creates a record with the given text.\n\
             | CONSOLE writes the result to Output Records.\n\
             ? marks the end of the pipeline.\n\n\
             Click Next to see HELLO, WORLD appear in the output!",
-        example_pipeline: "# Hello World - your first pipeline!\nPIPE LITERAL \"HELLO, WORLD\"\n| CONSOLE\n?",
+        example_pipeline: "# Hello World - your first pipeline!\nPIPE LITERAL HELLO, WORLD\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "PIPE/CONSOLE",
@@ -109,20 +109,20 @@ const TUTORIALS: &[TutorialStep] = &[
     TutorialStep {
         name: "LOCATE",
         description: "LOCATE finds records containing a pattern.\n\n\
-            Syntax: LOCATE \"pattern\"\n\
-            Syntax: LOCATE \"pattern\" pos,len (search specific field)\n\n\
+            Syntax: LOCATE /pattern/ (any delimiter works)\n\
+            Syntax: LOCATE pos,len /pattern/ (search specific field)\n\n\
             Case-sensitive substring search.\n\
             Only matching records pass through.",
-        example_pipeline: "# Locate: find records containing ENGINEER\nPIPE CONSOLE\n| LOCATE \"ENGINEER\"\n| CONSOLE\n?",
+        example_pipeline: "# Locate: find records containing ENGINEER\nPIPE CONSOLE\n| LOCATE /ENGINEER/\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "NLOCATE",
         description: "NLOCATE is the opposite of LOCATE.\n\n\
-            Syntax: NLOCATE \"pattern\"\n\
-            Syntax: NLOCATE \"pattern\" pos,len\n\n\
+            Syntax: NLOCATE /pattern/ (any delimiter works)\n\
+            Syntax: NLOCATE pos,len /pattern/\n\n\
             Records that do NOT contain the pattern pass through.\n\
             Useful for filtering out unwanted records.",
-        example_pipeline: "# Nlocate: exclude SALES records\nPIPE CONSOLE\n| NLOCATE \"SALES\"\n| CONSOLE\n?",
+        example_pipeline: "# Nlocate: exclude SALES records\nPIPE CONSOLE\n| NLOCATE /SALES/\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "COUNT",
@@ -130,25 +130,25 @@ const TUTORIALS: &[TutorialStep] = &[
             Syntax: COUNT\n\n\
             The count is right-justified in an 80-byte record.\n\
             Useful after FILTER or LOCATE to count matches.",
-        example_pipeline: "# Count: how many ENGINEER records?\nPIPE CONSOLE\n| LOCATE \"ENGINEER\"\n| COUNT\n| CONSOLE\n?",
+        example_pipeline: "# Count: how many ENGINEER records?\nPIPE CONSOLE\n| LOCATE /ENGINEER/\n| COUNT\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "CHANGE",
         description: "CHANGE replaces text in records.\n\n\
-            Syntax: CHANGE \"old\" \"new\"\n\n\
+            Syntax: CHANGE /old/new/ (any delimiter works)\n\n\
             Replaces ALL occurrences in each record.\n\
             Output is padded/truncated to 80 bytes.\n\
             Useful for data normalization.",
-        example_pipeline: "# Change: rename SALES to REVENUE\nPIPE CONSOLE\n| CHANGE \"SALES\" \"REVENUE\"\n| CONSOLE\n?",
+        example_pipeline: "# Change: rename SALES to REVENUE\nPIPE CONSOLE\n| CHANGE /SALES/REVENUE/\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "LITERAL",
         description: "LITERAL inserts a fixed record into the stream.\n\n\
-            Syntax: LITERAL \"text\"\n\n\
-            The literal is inserted BEFORE each input record.\n\
+            Syntax: LITERAL text (everything after LITERAL is the text)\n\n\
+            The literal is output FIRST, then all input records.\n\
             Text is padded to 80 bytes.\n\
             Useful for adding headers or separators.",
-        example_pipeline: "# Literal: add a header line\nPIPE CONSOLE\n| TAKE 1\n| LITERAL \"=== EMPLOYEE RECORD ===\"\n| CONSOLE\n?",
+        example_pipeline: "# Literal: add a header line\nPIPE CONSOLE\n| TAKE 1\n| LITERAL === EMPLOYEE RECORD ===\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "UPPER",
@@ -235,7 +235,7 @@ GARCIA  CARLOS    SALES     00045000
 TAYLOR  SUSAN     MARKETING 00065000
 BROWN   MICHAEL   ENGINEER  00090000"#;
 
-const DEFAULT_PIPELINE: &str = r#"PIPE LITERAL "HELLO, WORLD"
+const DEFAULT_PIPELINE: &str = r#"PIPE LITERAL HELLO, WORLD
 | CONSOLE
 ?"#;
 
