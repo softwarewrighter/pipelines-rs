@@ -140,7 +140,7 @@ pub const TUTORIALS: &[TutorialStep] = &[
             Replaces ALL occurrences in each record.\n\
             Output is padded/truncated to 80 bytes.\n\
             Useful for data normalization.",
-        example_pipeline: "# Change: rename SALES to REVENUE\nPIPE CONSOLE\n| CHANGE /SALES/REVENUE/\n| CONSOLE\n?",
+        example_pipeline: "# Change: rename SALES to REVENUE\nPIPE CONSOLE\n| CHANGE /SALES/ /REVENUE/\n| CONSOLE\n?",
     },
     TutorialStep {
         name: "LITERAL",
