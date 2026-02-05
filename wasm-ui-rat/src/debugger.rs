@@ -313,17 +313,6 @@ pub struct DebuggerProps {
     pub on_remove_watch: Callback<String>,
 }
 
-/// Run button label depends on state.
-fn run_button_label(state: &DebuggerState) -> &'static str {
-    if !state.active {
-        "Run"
-    } else if state.current_step >= state.total_steps {
-        "Reload"
-    } else {
-        "Run \u{25B6}\u{25B6}"
-    }
-}
-
 #[function_component(DebuggerPanel)]
 pub fn debugger_panel(props: &DebuggerProps) -> Html {
     let state = &props.state;
@@ -342,7 +331,6 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
     };
 
     let step_label = state.step_label();
-    let run_label = run_button_label(state);
     let step_disabled = !state.active || state.current_step >= state.total_steps;
     let reset_disabled = !state.active || state.current_step == 0;
 
@@ -353,7 +341,7 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                 <div class="debug-controls">
                     <button class="debug-btn debug-btn-run" onclick={on_run}
                         title="Run pipeline">
-                        {run_label}
+                        {"Run"}
                     </button>
                     <button class="debug-btn debug-btn-step"
                         onclick={on_step}
@@ -608,6 +596,30 @@ fn render_watch_item(
     }
 }
 
+/// Collect all records that passed through a pipe point across all traces.
+fn all_records_at(trace: &RatDebugTrace, stage_index: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    for rt in &trace.record_traces {
+        if let Some(pp) = rt.pipe_points.get(stage_index) {
+            for r in pp {
+                out.push(r.as_str().trim_end().to_string());
+            }
+        }
+    }
+    for ft in &trace.flush_traces {
+        let flush_start = ft.stage_index + 1;
+        if stage_index >= flush_start {
+            let offset = stage_index - flush_start;
+            if let Some(pp) = ft.pipe_points.get(offset) {
+                for r in pp {
+                    out.push(r.as_str().trim_end().to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
 fn render_watch_records(state: &DebuggerState, stage_index: usize) -> Html {
     if state.current_step == 0 {
         return html! {
@@ -622,6 +634,29 @@ fn render_watch_records(state: &DebuggerState, stage_index: usize) -> Html {
             };
         }
     };
+
+    // When execution is complete, show all records that ever passed this point.
+    if state.current_step >= state.total_steps {
+        let all = all_records_at(trace, stage_index);
+        if all.is_empty() {
+            return html! {};
+        }
+        let count = all.len();
+        return html! {
+            <>
+                { for all.iter().take(20).map(|text| {
+                    html! {
+                        <div class="watch-record">{text}</div>
+                    }
+                })}
+                if count > 20 {
+                    <div class="watch-record-more">
+                        {format!("... ({count} total)")}
+                    </div>
+                }
+            </>
+        };
+    }
 
     let records = if !state.in_flush_phase {
         trace.record_traces.get(state.trace_idx).and_then(|rt| {
