@@ -839,7 +839,8 @@ pub fn app() -> Html {
                             <span class="speed-value">{ format!("{}s", state.tutorial_delay) }</span>
                         </div>
                     }
-                    <select class="tutorial-select" onchange={on_tutorial_select}>
+                    <select class="tutorial-select" onchange={on_tutorial_select}
+                        disabled={state.show_debugger_tab}>
                         <option value="" selected={state.tutorial_step.is_none() && !state.auto_mode}>{ "Tutorial" }</option>
                         <option value="auto" selected={state.auto_mode}>{ "Run All (auto)" }</option>
                         { for TUTORIALS.iter().enumerate().map(|(idx, t)| {
