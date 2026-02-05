@@ -1,21 +1,25 @@
-//! Visual debugger component for record-at-a-time pipeline inspection.
+//! Visual debugger for record-at-a-time pipeline inspection.
 //!
-//! Steps through input records (not stages). Each step shows one record's
-//! journey through all pipe points simultaneously. After all records,
-//! flush traces are shown.
+//! Stepping is per-pipe-point: each step reveals the next pipe point
+//! in a record's journey through the pipeline. When a record is filtered
+//! (empty pipe point), the next step moves to the next record. After all
+//! records, flush traces are stepped similarly.
 //!
-//! **Important indexing note:** The library's `execute_pipeline_rat_debug`
-//! handles the source stage (e.g. CONSOLE) separately and passes only
-//! the remaining stages to the traced executor. So `trace.stage_names`
-//! does NOT include the source, and `pipe_points[0]` is the input to
-//! the first processing stage. But `pipeline_lines` includes all stages
-//! (source at index 0). The pipe point between pipeline stage `i` and
-//! `i+1` maps to `trace.pipe_points[i]`.
+//! As records reach the final stage, their output appears progressively
+//! in the output panel (not buffered until the end).
+//!
+//! **Indexing note:** `execute_pipeline_rat_debug` handles the source
+//! stage separately. `trace.stage_names` excludes the source;
+//! `pipe_points[0]` is the input to the first processing stage.
+//! `pipeline_lines` includes ALL stages (source at index 0). The pipe
+//! point between pipeline stage `i` and `i+1` maps to `pipe_points[i]`.
 
 use pipelines_rs::RatDebugTrace;
 use yew::prelude::*;
 
 use crate::dsl::PipelineLine;
+
+const DOTS: &str = "\u{00B7}\u{00B7}\u{00B7}";
 
 /// A watch placed at a pipe point between stages.
 #[derive(Clone, PartialEq)]
@@ -23,37 +27,34 @@ pub struct Watch {
     /// Display label: "w1", "w2", etc.
     pub label: String,
     /// Pipeline stage index of the stage above this pipe point.
-    /// The pipe point is between pipeline stage `stage_index` and
-    /// `stage_index + 1`.
     pub stage_index: usize,
 }
 
 /// Debugger state (stored in AppState).
 #[derive(Clone, PartialEq)]
 pub struct DebuggerState {
-    /// Whether the debugger has run at least once.
     pub active: bool,
-    /// Debug trace from RAT pipeline execution.
     pub trace: Option<RatDebugTrace>,
-    /// Current step: 0..total_steps (record traces then flush traces).
+    /// Global step counter (0 = initial, 1..=total_steps).
     pub current_step: usize,
-    /// Total steps: record_traces.len() + flush_traces.len().
+    /// Total granular steps across all records and flushes.
     pub total_steps: usize,
-    /// Ordered list of watches.
+    /// Index into record_traces or flush_traces.
+    pub trace_idx: usize,
+    /// Pipe points revealed for current trace entry (0 = none).
+    pub visible_pp: usize,
+    /// True when stepping through flush traces.
+    pub in_flush_phase: bool,
+    /// Output accumulated so far (records that reached the sink).
+    pub accumulated_output: String,
     pub watches: Vec<Watch>,
-    /// Counter for generating watch labels.
     pub next_watch_id: usize,
-    /// Total number of stages (not counting source).
     pub stage_count: usize,
-    /// Pipeline output text.
+    /// Full pipeline output (computed up front for run-all).
     pub output_text: String,
-    /// Input record count.
     pub input_count: usize,
-    /// Output record count.
     pub output_count: usize,
-    /// Pipeline lines for display.
     pub pipeline_lines: Vec<PipelineLine>,
-    /// Error from pipeline execution.
     pub error: Option<String>,
 }
 
@@ -64,6 +65,10 @@ impl Default for DebuggerState {
             trace: None,
             current_step: 0,
             total_steps: 0,
+            trace_idx: 0,
+            visible_pp: 0,
+            in_flush_phase: false,
+            accumulated_output: String::new(),
             watches: Vec::new(),
             next_watch_id: 1,
             stage_count: 0,
@@ -76,24 +81,46 @@ impl Default for DebuggerState {
     }
 }
 
+/// Max UI pipe points to reveal for a record trace.
+/// Stops at the first empty pipe point (filter) + 1.
+fn max_pp_for_record(rt: &pipelines_rs::RecordTrace) -> usize {
+    // Last pipe_point is final output (not a UI pipe point).
+    let ui_count = rt.pipe_points.len().saturating_sub(1);
+    for i in 0..ui_count {
+        if rt.pipe_points[i].is_empty() {
+            return i + 1;
+        }
+    }
+    ui_count
+}
+
+/// Max UI pipe points to reveal for a flush trace.
+fn max_pp_for_flush(ft: &pipelines_rs::FlushTrace, num_ui_pp: usize) -> usize {
+    let start = ft.stage_index + 1;
+    let viewable = num_ui_pp.saturating_sub(start).min(ft.pipe_points.len());
+    for i in 0..viewable {
+        if ft.pipe_points[i].is_empty() {
+            return i + 1;
+        }
+    }
+    viewable
+}
+
 impl DebuggerState {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add a watch at the given pipe point.
     pub fn add_watch(&mut self, stage_index: usize) {
         let label = format!("w{}", self.next_watch_id);
         self.next_watch_id += 1;
         self.watches.push(Watch { label, stage_index });
     }
 
-    /// Remove a watch by label.
     pub fn remove_watch(&mut self, label: &str) {
         self.watches.retain(|w| w.label != label);
     }
 
-    /// Get watches at a specific pipe point.
     pub fn watches_at(&self, stage_index: usize) -> Vec<&Watch> {
         self.watches
             .iter()
@@ -101,7 +128,6 @@ impl DebuggerState {
             .collect()
     }
 
-    /// Number of record traces.
     fn record_count(&self) -> usize {
         self.trace
             .as_ref()
@@ -109,7 +135,6 @@ impl DebuggerState {
             .unwrap_or(0)
     }
 
-    /// Number of flush traces.
     fn flush_count(&self) -> usize {
         self.trace
             .as_ref()
@@ -117,22 +142,163 @@ impl DebuggerState {
             .unwrap_or(0)
     }
 
-    /// Step counter label: "Record 2 of 8" or "Flush 1 of 2".
-    ///
-    /// `current_step` is 0 before any stepping; after one step it becomes 1
-    /// and the display shows `trace[0]`. So the label number equals
-    /// `current_step` (not `current_step + 1`).
+    fn num_ui_pipe_points(&self) -> usize {
+        self.pipeline_lines.len().saturating_sub(1)
+    }
+
+    fn current_max_pp(&self) -> usize {
+        let trace = match &self.trace {
+            Some(t) => t,
+            None => return 0,
+        };
+        if !self.in_flush_phase {
+            trace
+                .record_traces
+                .get(self.trace_idx)
+                .map(max_pp_for_record)
+                .unwrap_or(0)
+        } else {
+            let num_ui = self.num_ui_pipe_points();
+            trace
+                .flush_traces
+                .get(self.trace_idx)
+                .map(|ft| max_pp_for_flush(ft, num_ui))
+                .unwrap_or(0)
+        }
+    }
+
+    /// Compute total granular steps for all traces.
+    pub fn compute_total_steps(&self) -> usize {
+        let trace = match &self.trace {
+            Some(t) => t,
+            None => return 0,
+        };
+        let num_ui = self.num_ui_pipe_points();
+        let record_steps: usize = trace.record_traces.iter().map(max_pp_for_record).sum();
+        let flush_steps: usize = trace
+            .flush_traces
+            .iter()
+            .map(|ft| max_pp_for_flush(ft, num_ui))
+            .sum();
+        record_steps + flush_steps
+    }
+
+    /// Advance one granular step. Collects output when a trace completes.
+    pub fn advance(&mut self) {
+        if self.current_step >= self.total_steps {
+            return;
+        }
+        let max_pp = self.current_max_pp();
+        if self.visible_pp < max_pp {
+            self.visible_pp += 1;
+            if self.visible_pp == max_pp {
+                self.collect_output();
+            }
+        } else {
+            let rc = self.record_count();
+            if !self.in_flush_phase {
+                self.trace_idx += 1;
+                if self.trace_idx >= rc {
+                    self.in_flush_phase = true;
+                    self.trace_idx = 0;
+                }
+            } else {
+                self.trace_idx += 1;
+            }
+            self.visible_pp = 1;
+        }
+        self.current_step += 1;
+    }
+
+    /// Collect output records from the current trace entry's final pipe point.
+    fn collect_output(&mut self) {
+        let records_text: Vec<String> = {
+            let trace = match &self.trace {
+                Some(t) => t,
+                None => return,
+            };
+            let final_pp = if !self.in_flush_phase {
+                trace
+                    .record_traces
+                    .get(self.trace_idx)
+                    .and_then(|rt| rt.pipe_points.last())
+            } else {
+                trace
+                    .flush_traces
+                    .get(self.trace_idx)
+                    .and_then(|ft| ft.pipe_points.last())
+            };
+            match final_pp {
+                Some(records) if !records.is_empty() => records
+                    .iter()
+                    .map(|r| r.as_str().trim_end().to_string())
+                    .collect(),
+                _ => return,
+            }
+        };
+        for text in &records_text {
+            if !self.accumulated_output.is_empty() {
+                self.accumulated_output.push('\n');
+            }
+            self.accumulated_output.push_str(text);
+        }
+    }
+
+    /// Jump to the final state (all steps complete).
+    pub fn set_to_end(&mut self) {
+        let num_ui = self.num_ui_pipe_points();
+        let fc = self.flush_count();
+        let rc = self.record_count();
+
+        let final_vpp = if fc > 0 {
+            self.trace
+                .as_ref()
+                .map(|t| max_pp_for_flush(&t.flush_traces[fc - 1], num_ui))
+                .unwrap_or(0)
+        } else if rc > 0 {
+            self.trace
+                .as_ref()
+                .map(|t| max_pp_for_record(&t.record_traces[rc - 1]))
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        self.current_step = self.total_steps;
+        if fc > 0 {
+            self.in_flush_phase = true;
+            self.trace_idx = fc - 1;
+        } else if rc > 0 {
+            self.in_flush_phase = false;
+            self.trace_idx = rc - 1;
+        }
+        self.visible_pp = final_vpp;
+    }
+
+    /// Step counter label: "Record 2 of 8 (1/3)" or "Flush 1 of 2 (1/1)".
     fn step_label(&self) -> String {
         if !self.active || self.total_steps == 0 || self.current_step == 0 {
             return String::new();
         }
-        let rc = self.record_count();
-        if self.current_step <= rc {
-            format!("Record {} of {}", self.current_step, rc)
+        let max_pp = self.current_max_pp();
+        if !self.in_flush_phase {
+            let rc = self.record_count();
+            format!(
+                "Record {} of {} ({}/{})",
+                self.trace_idx + 1,
+                rc,
+                self.visible_pp,
+                max_pp
+            )
         } else {
-            let flush_num = self.current_step - rc;
             let fc = self.flush_count();
-            format!("Flush {} of {}", flush_num, fc)
+            format!(
+                "Flush {} of {} ({}/{})",
+                self.trace_idx + 1,
+                fc,
+                self.visible_pp,
+                max_pp
+            )
         }
     }
 }
@@ -148,7 +314,6 @@ pub struct DebuggerProps {
     pub on_remove_watch: Callback<String>,
 }
 
-/// Visual debugger panel component.
 #[function_component(DebuggerPanel)]
 pub fn debugger_panel(props: &DebuggerProps) -> Html {
     let state = &props.state;
@@ -157,17 +322,14 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
         let cb = props.on_run.clone();
         Callback::from(move |_: MouseEvent| cb.emit(()))
     };
-
     let on_step = {
         let cb = props.on_step.clone();
         Callback::from(move |_: MouseEvent| cb.emit(()))
     };
-
     let on_run_all = {
         let cb = props.on_run_all.clone();
         Callback::from(move |_: MouseEvent| cb.emit(()))
     };
-
     let on_reset = {
         let cb = props.on_reset.clone();
         Callback::from(move |_: MouseEvent| cb.emit(()))
@@ -186,7 +348,7 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
                     <button class="debug-btn"
                         onclick={on_step}
                         disabled={!state.active || state.current_step >= state.total_steps}
-                        title="Step to next record"
+                        title="Step to next pipe point"
                     >
                         {"Step \u{25B6}"}
                     </button>
@@ -220,9 +382,7 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
 
 fn render_error(state: &DebuggerState) -> Html {
     if let Some(err) = &state.error {
-        html! {
-            <div class="error">{err}</div>
-        }
+        html! { <div class="error">{err}</div> }
     } else {
         html! {}
     }
@@ -233,21 +393,18 @@ fn render_stage_list(state: &DebuggerState, on_add_watch: &Callback<usize>) -> H
         return html! {
             <div class="debugger-placeholder">
                 <p>{"Click "}<strong>{"Run"}</strong>{" to load the pipeline, then "}<strong>{"Step"}</strong>{" through records."}</p>
-                <p class="hint">{"Each step shows one record's journey through all stages."}</p>
+                <p class="hint">{"Each step advances a record one stage further."}</p>
             </div>
         };
     }
 
     let lines = &state.pipeline_lines;
-
     html! {
         <div class="stage-list">
             { for lines.iter().enumerate().map(|(i, line)| {
                 let stage_idx = line.stage_index;
-
                 html! {
                     <>
-                        // Stage row
                         <div class={classes!("stage-line", stage_class(state, stage_idx))}>
                             <span class="stage-prefix">
                                 { if stage_idx == 0 { "PIPE" } else { "|" } }
@@ -255,7 +412,6 @@ fn render_stage_list(state: &DebuggerState, on_add_watch: &Callback<usize>) -> H
                             <span class="stage-text">{&line.text}</span>
                             <span class="stage-number">{format!("stage {stage_idx}")}</span>
                         </div>
-                        // Pipe point between stages (not after last)
                         { if i < lines.len() - 1 {
                             render_pipe_point(state, stage_idx, on_add_watch)
                         } else {
@@ -268,50 +424,26 @@ fn render_stage_list(state: &DebuggerState, on_add_watch: &Callback<usize>) -> H
     }
 }
 
-/// Determine the CSS class for a stage row based on current step.
-///
-/// The source stage (pipeline index 0) is always active if there's data.
-/// Processing stages (pipeline index >= 1) map to trace stage index `i - 1`.
-/// A stage is "active" if it received input (the pipe point before it is
-/// non-empty).
+/// Stage is "completed" when the step has progressed past it.
 fn stage_class(state: &DebuggerState, stage_idx: usize) -> &'static str {
-    if state.current_step == 0 || state.current_step > state.total_steps {
+    if state.current_step == 0 {
         return "stage-pending";
     }
-
-    let trace = match &state.trace {
-        Some(t) => t,
-        None => return "stage-pending",
-    };
-
-    let rc = trace.record_traces.len();
-    let step = state.current_step - 1;
-
-    if step < rc {
-        let rt = &trace.record_traces[step];
-        // Source (stage 0): active if pipe_points[0] is non-empty
-        // Stage i (i >= 1): active if pipe_points[i-1] is non-empty
-        //   (pipe_points[i-1] is the input to trace stage i-1)
-        let input_pp = if stage_idx == 0 { 0 } else { stage_idx - 1 };
-        if input_pp < rt.pipe_points.len() && !rt.pipe_points[input_pp].is_empty() {
+    if !state.in_flush_phase {
+        if stage_idx < state.visible_pp {
             "stage-completed"
         } else {
             "stage-pending"
         }
     } else {
-        let flush_idx = step - rc;
-        if let Some(ft) = trace.flush_traces.get(flush_idx) {
-            // Flush originates at trace stage ft.stage_index.
-            // In pipeline terms, that's pipeline stage ft.stage_index + 1
-            // (because pipeline index 0 is the source).
-            let flush_pipeline_idx = ft.stage_index + 1;
-            if stage_idx >= flush_pipeline_idx {
-                let offset = stage_idx - flush_pipeline_idx;
-                if offset < ft.pipe_points.len() && !ft.pipe_points[offset].is_empty() {
-                    "stage-completed"
-                } else {
-                    "stage-pending"
-                }
+        let trace = match &state.trace {
+            Some(t) => t,
+            None => return "stage-pending",
+        };
+        if let Some(ft) = trace.flush_traces.get(state.trace_idx) {
+            let flush_start = ft.stage_index + 1;
+            if stage_idx >= flush_start && (stage_idx - flush_start) < state.visible_pp {
+                "stage-completed"
             } else {
                 "stage-pending"
             }
@@ -327,7 +459,6 @@ fn render_pipe_point(
     on_add_watch: &Callback<usize>,
 ) -> Html {
     let watches = state.watches_at(stage_index);
-
     let record_info = pipe_point_info(state, stage_index);
 
     let on_click = {
@@ -343,75 +474,56 @@ fn render_pipe_point(
         "pipe-point pipe-pending"
     };
 
-    // \u{24E6} = ⓦ (circled w)
     html! {
         <div class={pipe_class} onclick={on_click} title="Click to add watch">
             <span class="pipe-watch-icon">{"\u{24E6}"}</span>
             { for watches.iter().map(|w| {
-                html! {
-                    <span class="watch-label">{&w.label}</span>
-                }
+                html! { <span class="watch-label">{&w.label}</span> }
             })}
             <span class="pipe-info">{record_info}</span>
         </div>
     }
 }
 
-/// Get the pipe point info text for the current step.
-///
-/// The pipe point between pipeline stage `i` and `i+1` maps to
-/// `trace.pipe_points[i]` (because the source stage is excluded
-/// from the trace, so pipeline index 0 maps to pipe_points[0]).
+/// Pipe point info: only shows data for revealed pipe points.
 fn pipe_point_info(state: &DebuggerState, stage_index: usize) -> String {
     if state.current_step == 0 {
-        return "\u{00B7}\u{00B7}\u{00B7}".to_string();
+        return DOTS.to_string();
     }
-
     let trace = match &state.trace {
         Some(t) => t,
-        None => return "\u{00B7}\u{00B7}\u{00B7}".to_string(),
+        None => return DOTS.to_string(),
     };
-
-    let rc = trace.record_traces.len();
-    let step = state.current_step - 1;
-    let pp_index = stage_index;
-
-    if step < rc {
-        let rt = &trace.record_traces[step];
-        if pp_index < rt.pipe_points.len() {
-            let records = &rt.pipe_points[pp_index];
-            format_pipe_point_records(records)
-        } else {
-            "\u{00B7}\u{00B7}\u{00B7}".to_string()
-        }
-    } else {
-        let flush_idx = step - rc;
-        if let Some(ft) = trace.flush_traces.get(flush_idx) {
-            // In pipeline terms, flush originates at pipeline stage
-            // ft.stage_index + 1. The pipe point between pipeline stage i
-            // and i+1 gets flush data if i >= flush_pipeline_idx.
-            let flush_pipeline_idx = ft.stage_index + 1;
-            if stage_index >= flush_pipeline_idx {
-                let offset = stage_index - flush_pipeline_idx;
-                if offset < ft.pipe_points.len() {
-                    let records = &ft.pipe_points[offset];
-                    format_pipe_point_records(records)
-                } else {
-                    "\u{00B7}\u{00B7}\u{00B7}".to_string()
-                }
+    if !state.in_flush_phase {
+        if let Some(rt) = trace.record_traces.get(state.trace_idx) {
+            if stage_index < state.visible_pp && stage_index < rt.pipe_points.len() {
+                format_pipe_point_records(&rt.pipe_points[stage_index])
             } else {
-                "\u{00B7}\u{00B7}\u{00B7}".to_string()
+                DOTS.to_string()
             }
         } else {
-            "\u{00B7}\u{00B7}\u{00B7}".to_string()
+            DOTS.to_string()
         }
+    } else if let Some(ft) = trace.flush_traces.get(state.trace_idx) {
+        let flush_start = ft.stage_index + 1;
+        if stage_index >= flush_start {
+            let offset = stage_index - flush_start;
+            if offset < state.visible_pp && offset < ft.pipe_points.len() {
+                format_pipe_point_records(&ft.pipe_points[offset])
+            } else {
+                DOTS.to_string()
+            }
+        } else {
+            DOTS.to_string()
+        }
+    } else {
+        DOTS.to_string()
     }
 }
 
-/// Format records at a pipe point for display.
 fn format_pipe_point_records(records: &[pipelines_rs::Record]) -> String {
     if records.is_empty() {
-        "\u{00B7}\u{00B7}\u{00B7}".to_string()
+        DOTS.to_string()
     } else if records.len() == 1 {
         let preview = records[0].as_str().trim_end();
         let truncated = if preview.len() > 30 {
@@ -435,7 +547,6 @@ fn render_watch_list(state: &DebuggerState, on_remove_watch: &Callback<String>) 
     if !state.active {
         return html! {};
     }
-
     html! {
         <div class="watch-list">
             <h3 class="watch-list-header">{"Watches"}</h3>
@@ -455,7 +566,6 @@ fn render_watch_item(
     watch: &Watch,
     on_remove_watch: &Callback<String>,
 ) -> Html {
-    // Use pipeline_lines for stage names (includes source stage).
     let stage_name = state
         .pipeline_lines
         .iter()
@@ -503,7 +613,6 @@ fn render_watch_records(state: &DebuggerState, stage_index: usize) -> Html {
             <span class="watch-not-reached">{"step to see data"}</span>
         };
     }
-
     let trace = match &state.trace {
         Some(t) => t,
         None => {
@@ -513,20 +622,24 @@ fn render_watch_records(state: &DebuggerState, stage_index: usize) -> Html {
         }
     };
 
-    let rc = trace.record_traces.len();
-    let step = state.current_step - 1;
-    let pp_index = stage_index;
-
-    let records = if step < rc {
-        let rt = &trace.record_traces[step];
-        rt.pipe_points.get(pp_index)
+    let records = if !state.in_flush_phase {
+        trace.record_traces.get(state.trace_idx).and_then(|rt| {
+            if stage_index < state.visible_pp {
+                rt.pipe_points.get(stage_index)
+            } else {
+                None
+            }
+        })
     } else {
-        let flush_idx = step - rc;
-        trace.flush_traces.get(flush_idx).and_then(|ft| {
-            let flush_pipeline_idx = ft.stage_index + 1;
-            if stage_index >= flush_pipeline_idx {
-                let offset = stage_index - flush_pipeline_idx;
-                ft.pipe_points.get(offset)
+        trace.flush_traces.get(state.trace_idx).and_then(|ft| {
+            let flush_start = ft.stage_index + 1;
+            if stage_index >= flush_start {
+                let offset = stage_index - flush_start;
+                if offset < state.visible_pp {
+                    ft.pipe_points.get(offset)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -534,9 +647,7 @@ fn render_watch_records(state: &DebuggerState, stage_index: usize) -> Html {
     };
 
     match records {
-        Some(recs) if recs.is_empty() => {
-            html! {}
-        }
+        Some(recs) if recs.is_empty() => html! {},
         Some(recs) => {
             let count = recs.len();
             html! {
@@ -554,8 +665,6 @@ fn render_watch_records(state: &DebuggerState, stage_index: usize) -> Html {
                 </>
             }
         }
-        None => {
-            html! {}
-        }
+        None => html! {},
     }
 }

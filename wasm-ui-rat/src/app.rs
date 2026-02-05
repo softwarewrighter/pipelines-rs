@@ -492,17 +492,21 @@ pub fn app() -> Html {
             match execute_pipeline_debug(&new_state.input_text, &new_state.pipeline_text) {
                 Ok((output, input_count, output_count, trace)) => {
                     let stage_count = trace.stage_names.len();
-                    let total_steps = trace.record_traces.len() + trace.flush_traces.len();
                     new_state.debugger_state.active = true;
                     new_state.debugger_state.trace = Some(trace);
                     new_state.debugger_state.current_step = 0;
-                    new_state.debugger_state.total_steps = total_steps;
+                    new_state.debugger_state.trace_idx = 0;
+                    new_state.debugger_state.visible_pp = 0;
+                    new_state.debugger_state.in_flush_phase = false;
+                    new_state.debugger_state.accumulated_output = String::new();
                     new_state.debugger_state.stage_count = stage_count;
                     new_state.debugger_state.output_text = output;
                     new_state.debugger_state.input_count = input_count;
                     new_state.debugger_state.output_count = output_count;
                     new_state.debugger_state.pipeline_lines = lines;
                     new_state.debugger_state.error = None;
+                    new_state.debugger_state.total_steps =
+                        new_state.debugger_state.compute_total_steps();
                     // Keep existing watches; remove out-of-range ones
                     new_state
                         .debugger_state
@@ -514,6 +518,10 @@ pub fn app() -> Html {
                     new_state.debugger_state.trace = None;
                     new_state.debugger_state.current_step = 0;
                     new_state.debugger_state.total_steps = 0;
+                    new_state.debugger_state.trace_idx = 0;
+                    new_state.debugger_state.visible_pp = 0;
+                    new_state.debugger_state.in_flush_phase = false;
+                    new_state.debugger_state.accumulated_output = String::new();
                     new_state.debugger_state.stage_count = 0;
                     new_state.debugger_state.output_text.clear();
                     new_state.debugger_state.pipeline_lines = lines;
@@ -521,28 +529,31 @@ pub fn app() -> Html {
                 }
             }
 
+            // Clear output panel on new debug run
+            new_state.output_text.clear();
+            new_state.stats.clear();
+            new_state.error = None;
+
             state.set(new_state);
         })
     };
 
-    // Debugger: step forward one record (or flush)
+    // Debugger: step forward one pipe point
     let on_debug_step = {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
-            if new_state.debugger_state.current_step < new_state.debugger_state.total_steps {
-                new_state.debugger_state.current_step += 1;
+            new_state.debugger_state.advance();
 
-                // Update output panel when all steps complete
-                if new_state.debugger_state.current_step == new_state.debugger_state.total_steps {
-                    new_state.output_text = new_state.debugger_state.output_text.clone();
-                    new_state.stats = format!(
-                        "Input: {} records | Output: {} records",
-                        new_state.debugger_state.input_count, new_state.debugger_state.output_count,
-                    );
-                    new_state.error = None;
-                }
-            }
+            // Update output panel progressively
+            new_state.output_text = new_state.debugger_state.accumulated_output.clone();
+            let out_lines = new_state.output_text.lines().count();
+            new_state.stats = format!(
+                "Input: {} records | Output: {} records",
+                new_state.debugger_state.input_count, out_lines,
+            );
+            new_state.error = None;
+
             state.set(new_state);
         })
     };
@@ -552,7 +563,7 @@ pub fn app() -> Html {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
-            new_state.debugger_state.current_step = new_state.debugger_state.total_steps;
+            new_state.debugger_state.set_to_end();
             new_state.output_text = new_state.debugger_state.output_text.clone();
             new_state.stats = format!(
                 "Input: {} records | Output: {} records",
@@ -569,6 +580,14 @@ pub fn app() -> Html {
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
             new_state.debugger_state.current_step = 0;
+            new_state.debugger_state.trace_idx = 0;
+            new_state.debugger_state.visible_pp = 0;
+            new_state.debugger_state.in_flush_phase = false;
+            new_state.debugger_state.accumulated_output = String::new();
+            // Clear output panel on reset
+            new_state.output_text.clear();
+            new_state.stats.clear();
+            new_state.error = None;
             state.set(new_state);
         })
     };
