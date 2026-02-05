@@ -248,6 +248,57 @@ const DEFAULT_PIPELINE: &str = r#"PIPE CONSOLE
 | CONSOLE
 ?"#;
 
+/// Initialize debugger state by executing the pipeline with debug trace.
+fn initialize_debugger(state: &mut AppState) {
+    let lines = parse_pipeline_lines(&state.pipeline_text);
+    match execute_pipeline_debug(&state.input_text, &state.pipeline_text) {
+        Ok((output, input_count, output_count, trace)) => {
+            let stage_count = trace.stage_names.len();
+            state.debugger_state.active = true;
+            state.debugger_state.trace = Some(trace);
+            state.debugger_state.current_step = 0;
+            state.debugger_state.trace_idx = 0;
+            state.debugger_state.visible_pp = 0;
+            state.debugger_state.in_flush_phase = false;
+            state.debugger_state.accumulated_output = String::new();
+            state.debugger_state.stage_count = stage_count;
+            state.debugger_state.output_text = output;
+            state.debugger_state.input_count = input_count;
+            state.debugger_state.output_count = output_count;
+            state.debugger_state.pipeline_lines = lines;
+            state.debugger_state.error = None;
+            state.debugger_state.hit_breakpoint = None;
+            state.debugger_state.total_steps = state.debugger_state.compute_total_steps();
+            state
+                .debugger_state
+                .watches
+                .retain(|w| w.stage_index < stage_count);
+            state
+                .debugger_state
+                .breakpoints
+                .retain(|b| b.stage_index < stage_count);
+        }
+        Err(e) => {
+            state.debugger_state.active = true;
+            state.debugger_state.trace = None;
+            state.debugger_state.current_step = 0;
+            state.debugger_state.total_steps = 0;
+            state.debugger_state.trace_idx = 0;
+            state.debugger_state.visible_pp = 0;
+            state.debugger_state.in_flush_phase = false;
+            state.debugger_state.accumulated_output = String::new();
+            state.debugger_state.stage_count = 0;
+            state.debugger_state.output_text.clear();
+            state.debugger_state.pipeline_lines = lines;
+            state.debugger_state.error = Some(e);
+            state.debugger_state.hit_breakpoint = None;
+        }
+    }
+    state.output_text.clear();
+    state.stats.clear();
+    state.error = None;
+}
+
 /// Main application component.
 #[function_component(App)]
 pub fn app() -> Html {
@@ -482,7 +533,7 @@ pub fn app() -> Html {
         })
     };
 
-    // Debugger: load an example (pipeline + input data)
+    // Debugger: load an example (pipeline + input data) and auto-init debugger
     let on_debug_load_example = {
         let state = state.clone();
         Callback::from(move |idx: usize| {
@@ -491,9 +542,7 @@ pub fn app() -> Html {
                 new_state.pipeline_text = tutorial.example_pipeline.to_string();
                 new_state.input_text = DEFAULT_INPUT.to_string();
                 new_state.debugger_state = DebuggerState::new();
-                new_state.output_text.clear();
-                new_state.error = None;
-                new_state.stats.clear();
+                initialize_debugger(&mut new_state);
                 state.set(new_state);
             }
         })
@@ -518,9 +567,7 @@ pub fn app() -> Html {
                         let mut new_state = (*state).clone();
                         new_state.pipeline_text = text;
                         new_state.debugger_state = DebuggerState::new();
-                        new_state.output_text.clear();
-                        new_state.error = None;
-                        new_state.stats.clear();
+                        initialize_debugger(&mut new_state);
                         state.set(new_state);
                     }
                 }) as Box<dyn FnMut(_)>);
@@ -540,12 +587,16 @@ pub fn app() -> Html {
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
 
-            // If active and not finished, step to end (same as clicking Step repeatedly)
+            // If active and not finished, continue until breakpoint or end
             if new_state.debugger_state.active
                 && new_state.debugger_state.current_step < new_state.debugger_state.total_steps
             {
+                new_state.debugger_state.hit_breakpoint = None;
                 while new_state.debugger_state.current_step < new_state.debugger_state.total_steps {
-                    new_state.debugger_state.advance();
+                    let hit = new_state.debugger_state.advance();
+                    if hit {
+                        break;
+                    }
                 }
                 new_state.output_text = new_state.debugger_state.accumulated_output.clone();
                 let out_lines = new_state.output_text.lines().count();
@@ -558,53 +609,7 @@ pub fn app() -> Html {
                 return;
             }
 
-            let lines = parse_pipeline_lines(&new_state.pipeline_text);
-
-            match execute_pipeline_debug(&new_state.input_text, &new_state.pipeline_text) {
-                Ok((output, input_count, output_count, trace)) => {
-                    let stage_count = trace.stage_names.len();
-                    new_state.debugger_state.active = true;
-                    new_state.debugger_state.trace = Some(trace);
-                    new_state.debugger_state.current_step = 0;
-                    new_state.debugger_state.trace_idx = 0;
-                    new_state.debugger_state.visible_pp = 0;
-                    new_state.debugger_state.in_flush_phase = false;
-                    new_state.debugger_state.accumulated_output = String::new();
-                    new_state.debugger_state.stage_count = stage_count;
-                    new_state.debugger_state.output_text = output;
-                    new_state.debugger_state.input_count = input_count;
-                    new_state.debugger_state.output_count = output_count;
-                    new_state.debugger_state.pipeline_lines = lines;
-                    new_state.debugger_state.error = None;
-                    new_state.debugger_state.total_steps =
-                        new_state.debugger_state.compute_total_steps();
-                    // Keep existing watches; remove out-of-range ones
-                    new_state
-                        .debugger_state
-                        .watches
-                        .retain(|w| w.stage_index < stage_count);
-                }
-                Err(e) => {
-                    new_state.debugger_state.active = true;
-                    new_state.debugger_state.trace = None;
-                    new_state.debugger_state.current_step = 0;
-                    new_state.debugger_state.total_steps = 0;
-                    new_state.debugger_state.trace_idx = 0;
-                    new_state.debugger_state.visible_pp = 0;
-                    new_state.debugger_state.in_flush_phase = false;
-                    new_state.debugger_state.accumulated_output = String::new();
-                    new_state.debugger_state.stage_count = 0;
-                    new_state.debugger_state.output_text.clear();
-                    new_state.debugger_state.pipeline_lines = lines;
-                    new_state.debugger_state.error = Some(e);
-                }
-            }
-
-            // Clear output panel on new debug run
-            new_state.output_text.clear();
-            new_state.stats.clear();
-            new_state.error = None;
-
+            initialize_debugger(&mut new_state);
             state.set(new_state);
         })
     };
@@ -614,6 +619,7 @@ pub fn app() -> Html {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
+            new_state.debugger_state.hit_breakpoint = None;
             new_state.debugger_state.advance();
 
             // Update output panel progressively
@@ -639,6 +645,7 @@ pub fn app() -> Html {
             new_state.debugger_state.visible_pp = 0;
             new_state.debugger_state.in_flush_phase = false;
             new_state.debugger_state.accumulated_output = String::new();
+            new_state.debugger_state.hit_breakpoint = None;
             // Clear output panel on reset
             new_state.output_text.clear();
             new_state.stats.clear();
@@ -647,12 +654,22 @@ pub fn app() -> Html {
         })
     };
 
-    // Debugger: add watch at pipe point
-    let on_add_watch = {
+    // Debugger: toggle watch at pipe point
+    let on_toggle_watch = {
         let state = state.clone();
         Callback::from(move |stage_index: usize| {
             let mut new_state = (*state).clone();
-            new_state.debugger_state.add_watch(stage_index);
+            new_state.debugger_state.toggle_watch(stage_index);
+            state.set(new_state);
+        })
+    };
+
+    // Debugger: toggle breakpoint at pipe point
+    let on_toggle_breakpoint = {
+        let state = state.clone();
+        Callback::from(move |stage_index: usize| {
+            let mut new_state = (*state).clone();
+            new_state.debugger_state.toggle_breakpoint(stage_index);
             state.set(new_state);
         })
     };
@@ -864,7 +881,8 @@ pub fn app() -> Html {
                                 on_run={on_debug_run}
                                 on_step={on_debug_step}
                                 on_reset={on_debug_reset}
-                                on_add_watch={on_add_watch}
+                                on_toggle_watch={on_toggle_watch}
+                                on_toggle_breakpoint={on_toggle_breakpoint}
                                 on_remove_watch={on_remove_watch}
                                 on_load_example={on_debug_load_example}
                                 on_load_file={on_debug_load_file}

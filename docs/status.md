@@ -4,7 +4,7 @@
 
 **Project**: pipelines-rs
 **Version**: 0.1.0 (pre-release)
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-04
 
 ### Overall Progress
 
@@ -13,7 +13,7 @@
 | M1: Core Pipeline | Complete | 100% |
 | M2: File I/O | Complete | 100% |
 | M3: CLI Interface | Complete | 100% |
-| M4: Advanced Features | Not Started | 0% |
+| M4: Visual Debugger | Complete | 100% |
 | M5: Polish and Release | Not Started | 0% |
 
 ### Current Phase
@@ -24,6 +24,14 @@
 **Focus**: Demo scripts and pipeline execution
 
 ## Recent Activity
+
+### 2026-02-04
+- [x] Implemented breakpoints in RAT visual debugger (toggle, Run pauses at BP, red highlight)
+- [x] Fixed Load dropdown to auto-initialize debugger (no extra Run click needed)
+- [x] Fixed watch icon contrast (color-based instead of opacity-based)
+- [x] Fixed duplicate watches (toggle on/off instead of always adding)
+- [x] Created debugger-manual.md in naive-pipe/docs/
+- [x] Updated project docs to reflect M4 completion
 
 ### 2026-02-02
 - [x] Created `multi-stage-pipes-design.md` document
@@ -78,6 +86,7 @@ See [Multi-Stage Pipeline Design](multi-stage-pipes-design.md) for detailed desi
 - **Tutorial system**: Interactive tutorials with auto-run mode
 - **DSL Parser**: Text-based pipeline commands (FILTER, SELECT, TAKE, SKIP, LOCATE, NLOCATE, COUNT, CHANGE, LITERAL, UPPER, LOWER, REVERSE, DUPLICATE)
 - **Live demo**: https://sw-comp-history.github.io/pipelines-rs/
+- **Visual debugger**: Record-at-a-time debugger with stepping, watches, and breakpoints (wasm-ui-rat)
 
 ## What's Not Working
 
@@ -101,7 +110,7 @@ None currently.
 
 1. [ ] Add proper Merge stage (sorted merge)
 2. [ ] Add Split stage (multi-output)
-3. [ ] Debug inspector panel
+3. [x] Debug inspector panel (complete - see wasm-ui-rat)
 
 ### Medium Term (Next Quarter)
 

@@ -38,9 +38,16 @@ behavior.
 - Instrument the pipeline executor to optionally capture traces.
 - Write tests verifying trace output for representative pipelines.
 
-## Phase 4: Debugger UI
+## Phase 4: Debugger UI - COMPLETE
 
-- Update the WASM debugger to use the record-at-a-time executor.
-- Show the current record at each pipe point as it flows through stages.
-- Support stepping forward one record at a time.
-- Display watch values at each pipe point.
+- [x] Update the WASM debugger to use the record-at-a-time executor.
+- [x] Show the current record at each pipe point as it flows through stages.
+- [x] Support stepping forward one record at a time.
+- [x] Display watch values at each pipe point.
+- [x] Toggle watches on/off (click to add, click again to remove).
+- [x] Breakpoints at pipe points (toggle on/off, Run pauses at breakpoint).
+- [x] Breakpoint-hit highlighting (red row background, `[BP]` step label).
+- [x] Load dropdown auto-initializes the debugger (no extra Run needed).
+- [x] Color-based icon visibility (gold for watches, red for breakpoints).
+
+See [Debugger Manual](debugger-manual.md) for usage instructions.

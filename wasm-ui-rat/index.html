@@ -791,7 +791,6 @@
             align-items: center;
             padding: 0.15rem 0.75rem 0.15rem 1rem;
             gap: 0.5rem;
-            cursor: pointer;
             font-size: 0.8rem;
             transition: background-color 0.15s;
         }
@@ -810,12 +809,37 @@
 
         .pipe-watch-icon {
             font-size: 0.9rem;
-            opacity: 0.5;
-            transition: opacity 0.15s;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.15s;
         }
 
-        .pipe-point:hover .pipe-watch-icon {
-            opacity: 1;
+        .pipe-watch-icon:hover {
+            color: #ffd700;
+        }
+
+        .pipe-watch-icon.active {
+            color: #ffd700;
+        }
+
+        .pipe-bp-icon {
+            font-size: 0.9rem;
+            color: #555;
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+
+        .pipe-bp-icon:hover {
+            color: #ff4444;
+        }
+
+        .pipe-bp-icon.active {
+            color: #ff4444;
+        }
+
+        .pipe-point.pipe-bp-hit {
+            background-color: rgba(255, 68, 68, 0.2);
+            border-left: 3px solid #ff4444;
         }
 
         .pipe-info {

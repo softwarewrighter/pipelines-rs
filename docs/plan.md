@@ -409,14 +409,19 @@ See [Multi-Stage Pipeline Design](multi-stage-pipes-design.md) for detailed desi
 - [x] Demo scripts (create multi-pipeline examples)
 - [x] Documentation updates (user manual, examples)
 
-### Milestone 4: Visual Pipeline Debugger (Post-MVP)
-Add a visual debugger panel showing real-time pipeline execution:
-- Tabbed debugger view separate from main interface
-- Pipeline flow visualization with stage-by-stage execution
-- Stage controls (play, pause, reset, step-through)
-- Breakpoints at specific stages
-- Live record inspection at each stage
-- Record counts per stage
+### Milestone 4: Visual Pipeline Debugger - COMPLETE
+Record-at-a-time visual debugger in `wasm-ui-rat/`:
+- [x] Tabbed debugger view separate from main interface
+- [x] Pipeline flow visualization with stage-by-stage execution
+- [x] Stage controls (Run, Step, Reset)
+- [x] Per-pipe-point stepping with record and flush phases
+- [x] Progressive output (records appear as they reach the sink)
+- [x] Watch points with toggle on/off and data panel
+- [x] Breakpoints at pipe points (Run pauses, red highlight, `[BP]` label)
+- [x] Load dropdown with auto-initialization (examples + file upload)
+- [x] Color-based icon visibility (gold watches, red breakpoints)
+
+See [naive-pipe/docs/debugger-manual.md](../naive-pipe/docs/debugger-manual.md) for usage.
 
 ### Milestone 5: Advanced Multi-Stage Features (Future)
 - SPLIT stage with conditional routing (match-based subpipes)

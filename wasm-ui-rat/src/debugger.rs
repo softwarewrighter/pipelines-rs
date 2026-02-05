@@ -32,6 +32,12 @@ pub struct Watch {
     pub stage_index: usize,
 }
 
+/// A breakpoint at a pipe point between stages.
+#[derive(Clone, PartialEq)]
+pub struct Breakpoint {
+    pub stage_index: usize,
+}
+
 /// Debugger state (stored in AppState).
 #[derive(Clone, PartialEq)]
 pub struct DebuggerState {
@@ -51,6 +57,8 @@ pub struct DebuggerState {
     pub accumulated_output: String,
     pub watches: Vec<Watch>,
     pub next_watch_id: usize,
+    pub breakpoints: Vec<Breakpoint>,
+    pub hit_breakpoint: Option<usize>,
     pub stage_count: usize,
     /// Full pipeline output (computed up front for run-all).
     pub output_text: String,
@@ -73,6 +81,8 @@ impl Default for DebuggerState {
             accumulated_output: String::new(),
             watches: Vec::new(),
             next_watch_id: 1,
+            breakpoints: Vec::new(),
+            hit_breakpoint: None,
             stage_count: 0,
             output_text: String::new(),
             input_count: 0,
@@ -113,10 +123,18 @@ impl DebuggerState {
         Self::default()
     }
 
-    pub fn add_watch(&mut self, stage_index: usize) {
-        let label = format!("w{}", self.next_watch_id);
-        self.next_watch_id += 1;
-        self.watches.push(Watch { label, stage_index });
+    pub fn toggle_watch(&mut self, stage_index: usize) {
+        if let Some(pos) = self
+            .watches
+            .iter()
+            .position(|w| w.stage_index == stage_index)
+        {
+            self.watches.remove(pos);
+        } else {
+            let label = format!("w{}", self.next_watch_id);
+            self.next_watch_id += 1;
+            self.watches.push(Watch { label, stage_index });
+        }
     }
 
     pub fn remove_watch(&mut self, label: &str) {
@@ -128,6 +146,24 @@ impl DebuggerState {
             .iter()
             .filter(|w| w.stage_index == stage_index)
             .collect()
+    }
+
+    pub fn toggle_breakpoint(&mut self, stage_index: usize) {
+        if let Some(pos) = self
+            .breakpoints
+            .iter()
+            .position(|b| b.stage_index == stage_index)
+        {
+            self.breakpoints.remove(pos);
+        } else {
+            self.breakpoints.push(Breakpoint { stage_index });
+        }
+    }
+
+    pub fn has_breakpoint(&self, stage_index: usize) -> bool {
+        self.breakpoints
+            .iter()
+            .any(|b| b.stage_index == stage_index)
     }
 
     fn record_count(&self) -> usize {
@@ -185,10 +221,24 @@ impl DebuggerState {
         record_steps + flush_steps
     }
 
+    /// Returns the pipe point index most recently revealed.
+    pub fn currently_revealed_pipe_point(&self) -> Option<usize> {
+        if self.current_step == 0 || self.visible_pp == 0 {
+            return None;
+        }
+        if !self.in_flush_phase {
+            Some(self.visible_pp - 1)
+        } else {
+            let ft = self.trace.as_ref()?.flush_traces.get(self.trace_idx)?;
+            Some(ft.stage_index + self.visible_pp)
+        }
+    }
+
     /// Advance one granular step. Collects output when a trace completes.
-    pub fn advance(&mut self) {
+    /// Returns `true` if a breakpoint was hit.
+    pub fn advance(&mut self) -> bool {
         if self.current_step >= self.total_steps {
-            return;
+            return false;
         }
         let max_pp = self.current_max_pp();
         if self.visible_pp < max_pp {
@@ -210,6 +260,13 @@ impl DebuggerState {
             self.visible_pp = 1;
         }
         self.current_step += 1;
+        if let Some(pp) = self.currently_revealed_pipe_point() {
+            if self.has_breakpoint(pp) {
+                self.hit_breakpoint = Some(pp);
+                return true;
+            }
+        }
+        false
     }
 
     /// Collect output records from the current trace entry's final pipe point.
@@ -252,10 +309,15 @@ impl DebuggerState {
             return String::new();
         }
         let max_pp = self.current_max_pp();
+        let prefix = if self.hit_breakpoint.is_some() {
+            "[BP] "
+        } else {
+            ""
+        };
         if !self.in_flush_phase {
             let rc = self.record_count();
             format!(
-                "Record {} of {} ({}/{})",
+                "{prefix}Record {} of {} ({}/{})",
                 self.trace_idx + 1,
                 rc,
                 self.visible_pp,
@@ -264,7 +326,7 @@ impl DebuggerState {
         } else {
             let fc = self.flush_count();
             format!(
-                "Flush {} of {} ({}/{})",
+                "{prefix}Flush {} of {} ({}/{})",
                 self.trace_idx + 1,
                 fc,
                 self.visible_pp,
@@ -280,7 +342,8 @@ pub struct DebuggerProps {
     pub on_run: Callback<()>,
     pub on_step: Callback<()>,
     pub on_reset: Callback<()>,
-    pub on_add_watch: Callback<usize>,
+    pub on_toggle_watch: Callback<usize>,
+    pub on_toggle_breakpoint: Callback<usize>,
     pub on_remove_watch: Callback<String>,
     pub on_load_example: Callback<usize>,
     pub on_load_file: Callback<web_sys::Event>,
@@ -373,7 +436,7 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
             </div>
             <div class="panel-content debugger-content">
                 { render_error(state) }
-                { render_stage_list(state, &props.on_add_watch) }
+                { render_stage_list(state, &props.on_toggle_watch, &props.on_toggle_breakpoint) }
                 { render_watch_list(state, &props.on_remove_watch) }
             </div>
         </div>
@@ -388,7 +451,11 @@ fn render_error(state: &DebuggerState) -> Html {
     }
 }
 
-fn render_stage_list(state: &DebuggerState, on_add_watch: &Callback<usize>) -> Html {
+fn render_stage_list(
+    state: &DebuggerState,
+    on_toggle_watch: &Callback<usize>,
+    on_toggle_breakpoint: &Callback<usize>,
+) -> Html {
     if !state.active {
         return html! {
             <div class="debugger-placeholder">
@@ -413,7 +480,7 @@ fn render_stage_list(state: &DebuggerState, on_add_watch: &Callback<usize>) -> H
                             <span class="stage-number">{format!("stage {stage_idx}")}</span>
                         </div>
                         { if i < lines.len() - 1 {
-                            render_pipe_point(state, stage_idx, on_add_watch)
+                            render_pipe_point(state, stage_idx, on_toggle_watch, on_toggle_breakpoint)
                         } else {
                             html! {}
                         }}
@@ -456,27 +523,58 @@ fn stage_class(state: &DebuggerState, stage_idx: usize) -> &'static str {
 fn render_pipe_point(
     state: &DebuggerState,
     stage_index: usize,
-    on_add_watch: &Callback<usize>,
+    on_toggle_watch: &Callback<usize>,
+    on_toggle_breakpoint: &Callback<usize>,
 ) -> Html {
     let watches = state.watches_at(stage_index);
     let record_info = pipe_point_info(state, stage_index);
+    let has_watch = !watches.is_empty();
+    let has_bp = state.has_breakpoint(stage_index);
+    let is_bp_hit = state.hit_breakpoint == Some(stage_index);
 
-    let on_click = {
-        let cb = on_add_watch.clone();
+    let on_watch_click = {
+        let cb = on_toggle_watch.clone();
         let idx = stage_index;
-        Callback::from(move |_: MouseEvent| cb.emit(idx))
+        Callback::from(move |e: MouseEvent| {
+            e.stop_propagation();
+            cb.emit(idx);
+        })
+    };
+
+    let on_bp_click = {
+        let cb = on_toggle_breakpoint.clone();
+        let idx = stage_index;
+        Callback::from(move |e: MouseEvent| {
+            e.stop_propagation();
+            cb.emit(idx);
+        })
     };
 
     let has_data = state.current_step > 0 && !record_info.starts_with('\u{00B7}');
-    let pipe_class = if has_data {
+    let base_class = if has_data {
         "pipe-point pipe-reached"
     } else {
         "pipe-point pipe-pending"
     };
+    let watch_class = if has_watch {
+        "pipe-watch-icon active"
+    } else {
+        "pipe-watch-icon"
+    };
+    let bp_class = if has_bp {
+        "pipe-bp-icon active"
+    } else {
+        "pipe-bp-icon"
+    };
 
     html! {
-        <div class={pipe_class} onclick={on_click} title="Click to add watch">
-            <span class="pipe-watch-icon">{"\u{24E6}"}</span>
+        <div class={classes!(base_class, is_bp_hit.then_some("pipe-bp-hit"))}>
+            <span class={watch_class} onclick={on_watch_click} title="Toggle watch">
+                {"\u{24E6}"}
+            </span>
+            <span class={bp_class} onclick={on_bp_click} title="Toggle breakpoint">
+                {"\u{24B7}"}
+            </span>
             { for watches.iter().map(|w| {
                 html! { <span class="watch-label">{&w.label}</span> }
             })}
@@ -551,7 +649,7 @@ fn render_watch_list(state: &DebuggerState, on_remove_watch: &Callback<String>) 
         <div class="watch-list">
             <h3 class="watch-list-header">{"Watches"}</h3>
             if state.watches.is_empty() {
-                <p class="watch-hint">{"Click a pipe point to add a watch"}</p>
+                <p class="watch-hint">{"Click \u{24E6} to toggle a watch"}</p>
             } else {
                 { for state.watches.iter().map(|watch| {
                     render_watch_item(state, watch, on_remove_watch)
