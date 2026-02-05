@@ -700,7 +700,7 @@ pub fn app() -> Html {
         <div class="app">
             <header class="header">
                 <div class="header-left">
-                    <h1>{ "pipelines-rs" }</h1>
+                    <h1>{ "pipelines-rs (Batched)" }</h1>
                     <p class="subtitle">{ "Mainframe-Style 80-Byte Record Processing" }</p>
                 </div>
                 <div class="header-right">

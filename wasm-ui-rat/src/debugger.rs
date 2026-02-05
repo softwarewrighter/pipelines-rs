@@ -15,8 +15,10 @@
 //! point between pipeline stage `i` and `i+1` maps to `pipe_points[i]`.
 
 use pipelines_rs::RatDebugTrace;
+use web_sys::HtmlSelectElement;
 use yew::prelude::*;
 
+use crate::app::TUTORIALS;
 use crate::dsl::PipelineLine;
 
 const DOTS: &str = "\u{00B7}\u{00B7}\u{00B7}";
@@ -280,11 +282,37 @@ pub struct DebuggerProps {
     pub on_reset: Callback<()>,
     pub on_add_watch: Callback<usize>,
     pub on_remove_watch: Callback<String>,
+    pub on_load_example: Callback<usize>,
+    pub on_load_file: Callback<web_sys::Event>,
 }
 
 #[function_component(DebuggerPanel)]
 pub fn debugger_panel(props: &DebuggerProps) -> Html {
     let state = &props.state;
+    let file_input_ref = use_node_ref();
+
+    let on_load_select = {
+        let cb_example = props.on_load_example.clone();
+        let file_ref = file_input_ref.clone();
+        Callback::from(move |e: Event| {
+            let target: HtmlSelectElement = e.target_unchecked_into();
+            let value = target.value();
+            if value == "upload" {
+                if let Some(input) = file_ref.cast::<web_sys::HtmlInputElement>() {
+                    input.click();
+                }
+            } else if let Ok(idx) = value.parse::<usize>() {
+                cb_example.emit(idx);
+            }
+            // Reset select back to placeholder
+            target.set_value("");
+        })
+    };
+
+    let on_file_change = {
+        let cb = props.on_load_file.clone();
+        Callback::from(move |e: Event| cb.emit(e))
+    };
 
     let on_run = {
         let cb = props.on_run.clone();
@@ -308,6 +336,20 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
             <div class="panel-header">
                 <h2>{"Visual Debugger"}</h2>
                 <div class="debug-controls">
+                    <select class="debug-load-select" onchange={on_load_select}
+                        title="Load an example or upload a .pipe file">
+                        <option value="" disabled=true selected=true>{"Load..."}</option>
+                        <optgroup label="Examples">
+                            { for TUTORIALS.iter().enumerate().map(|(idx, t)| {
+                                html! {
+                                    <option value={idx.to_string()}>{t.name}</option>
+                                }
+                            })}
+                        </optgroup>
+                        <option value="upload">{"Upload .pipe file..."}</option>
+                    </select>
+                    <input type="file" accept=".pipe" ref={file_input_ref}
+                        style="display:none" onchange={on_file_change} />
                     <button class="debug-btn debug-btn-run" onclick={on_run}
                         title="Run pipeline">
                         {"Run"}

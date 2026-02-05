@@ -45,7 +45,7 @@ pub struct TutorialStep {
     pub example_pipeline: &'static str,
 }
 
-const TUTORIALS: &[TutorialStep] = &[
+pub const TUTORIALS: &[TutorialStep] = &[
     TutorialStep {
         name: "Hello World",
         description: "Welcome to pipelines-rs!\n\n\
@@ -233,7 +233,7 @@ impl Default for AppState {
     }
 }
 
-const DEFAULT_INPUT: &str = r#"SMITH   JOHN      SALES     00050000
+pub const DEFAULT_INPUT: &str = r#"SMITH   JOHN      SALES     00050000
 JONES   MARY      ENGINEER  00075000
 DOE     JANE      SALES     00060000
 WILSON  ROBERT    MARKETING 00055000
@@ -309,26 +309,26 @@ pub fn app() -> Html {
         Callback::from(move |e: web_sys::Event| {
             let state = state.clone();
             let input: HtmlInputElement = e.target_unchecked_into();
-            if let Some(files) = input.files() {
-                if let Some(file) = files.get(0) {
-                    let reader = web_sys::FileReader::new().unwrap();
-                    let reader_clone = reader.clone();
+            if let Some(files) = input.files()
+                && let Some(file) = files.get(0)
+            {
+                let reader = web_sys::FileReader::new().unwrap();
+                let reader_clone = reader.clone();
 
-                    let onload = Closure::wrap(Box::new(move |_: web_sys::Event| {
-                        if let Ok(result) = reader_clone.result() {
-                            if let Some(text) = result.as_string() {
-                                let mut new_state = (*state).clone();
-                                new_state.pipeline_text = text;
-                                state.set(new_state);
-                            }
-                        }
-                    }) as Box<dyn FnMut(_)>);
+                let onload = Closure::wrap(Box::new(move |_: web_sys::Event| {
+                    if let Ok(result) = reader_clone.result()
+                        && let Some(text) = result.as_string()
+                    {
+                        let mut new_state = (*state).clone();
+                        new_state.pipeline_text = text;
+                        state.set(new_state);
+                    }
+                }) as Box<dyn FnMut(_)>);
 
-                    reader.set_onload(Some(onload.as_ref().unchecked_ref()));
-                    onload.forget();
+                reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+                onload.forget();
 
-                    let _ = reader.read_as_text(&file);
-                }
+                let _ = reader.read_as_text(&file);
             }
             // Clear the input so the same file can be loaded again
             input.set_value("");
@@ -405,10 +405,10 @@ pub fn app() -> Html {
         let state = state.clone();
         Callback::from(move |_: MouseEvent| {
             let mut new_state = (*state).clone();
-            if let Some(idx) = new_state.tutorial_step {
-                if let Some(tutorial) = TUTORIALS.get(idx) {
-                    new_state.pipeline_text = tutorial.example_pipeline.to_string();
-                }
+            if let Some(idx) = new_state.tutorial_step
+                && let Some(tutorial) = TUTORIALS.get(idx)
+            {
+                new_state.pipeline_text = tutorial.example_pipeline.to_string();
             }
             new_state.tutorial_phase = TutorialPhase::ShowingRunTooltip;
             if new_state.auto_mode {
@@ -479,6 +479,58 @@ pub fn app() -> Html {
             new_state.error = None;
             new_state.stats.clear();
             state.set(new_state);
+        })
+    };
+
+    // Debugger: load an example (pipeline + input data)
+    let on_debug_load_example = {
+        let state = state.clone();
+        Callback::from(move |idx: usize| {
+            if let Some(tutorial) = TUTORIALS.get(idx) {
+                let mut new_state = (*state).clone();
+                new_state.pipeline_text = tutorial.example_pipeline.to_string();
+                new_state.input_text = DEFAULT_INPUT.to_string();
+                new_state.debugger_state = DebuggerState::new();
+                new_state.output_text.clear();
+                new_state.error = None;
+                new_state.stats.clear();
+                state.set(new_state);
+            }
+        })
+    };
+
+    // Debugger: load a .pipe file
+    let on_debug_load_file = {
+        let state = state.clone();
+        Callback::from(move |e: web_sys::Event| {
+            let state = state.clone();
+            let input: HtmlInputElement = e.target_unchecked_into();
+            if let Some(files) = input.files()
+                && let Some(file) = files.get(0)
+            {
+                let reader = web_sys::FileReader::new().unwrap();
+                let reader_clone = reader.clone();
+
+                let onload = Closure::wrap(Box::new(move |_: web_sys::Event| {
+                    if let Ok(result) = reader_clone.result()
+                        && let Some(text) = result.as_string()
+                    {
+                        let mut new_state = (*state).clone();
+                        new_state.pipeline_text = text;
+                        new_state.debugger_state = DebuggerState::new();
+                        new_state.output_text.clear();
+                        new_state.error = None;
+                        new_state.stats.clear();
+                        state.set(new_state);
+                    }
+                }) as Box<dyn FnMut(_)>);
+
+                reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+                onload.forget();
+
+                let _ = reader.read_as_text(&file);
+            }
+            input.set_value("");
         })
     };
 
@@ -662,11 +714,11 @@ pub fn app() -> Html {
                             match current_phase {
                                 TutorialPhase::ShowingDialog => {
                                     // Load example and show Run tooltip
-                                    if let Some(idx) = tutorial_step {
-                                        if let Some(tutorial) = TUTORIALS.get(idx) {
-                                            new_state.pipeline_text =
-                                                tutorial.example_pipeline.to_string();
-                                        }
+                                    if let Some(idx) = tutorial_step
+                                        && let Some(tutorial) = TUTORIALS.get(idx)
+                                    {
+                                        new_state.pipeline_text =
+                                            tutorial.example_pipeline.to_string();
                                     }
                                     new_state.tutorial_phase = TutorialPhase::ShowingRunTooltip;
                                     new_state.countdown = tutorial_delay;
@@ -814,6 +866,8 @@ pub fn app() -> Html {
                                 on_reset={on_debug_reset}
                                 on_add_watch={on_add_watch}
                                 on_remove_watch={on_remove_watch}
+                                on_load_example={on_debug_load_example}
+                                on_load_file={on_debug_load_file}
                             />
                         }
                     }}
