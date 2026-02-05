@@ -487,6 +487,24 @@ pub fn app() -> Html {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
+
+            // If already stepping, run to end instead of reloading
+            if new_state.debugger_state.active
+                && new_state.debugger_state.current_step > 0
+                && new_state.debugger_state.current_step < new_state.debugger_state.total_steps
+            {
+                new_state.debugger_state.set_to_end();
+                new_state.output_text = new_state.debugger_state.output_text.clone();
+                new_state.stats = format!(
+                    "Input: {} records | Output: {} records",
+                    new_state.debugger_state.input_count,
+                    new_state.debugger_state.output_count,
+                );
+                new_state.error = None;
+                state.set(new_state);
+                return;
+            }
+
             let lines = parse_pipeline_lines(&new_state.pipeline_text);
 
             match execute_pipeline_debug(&new_state.input_text, &new_state.pipeline_text) {
