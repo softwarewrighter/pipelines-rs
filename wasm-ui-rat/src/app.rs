@@ -822,7 +822,7 @@ pub fn app() -> Html {
                                 }
                             })}
                         >
-                            {"Visual Debugger"}
+                            {"Debug"}
                         </button>
                     </div>
                     if !state.show_debugger_tab && state.tutorial_step.is_some() {

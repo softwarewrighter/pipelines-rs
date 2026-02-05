@@ -397,11 +397,11 @@ pub fn debugger_panel(props: &DebuggerProps) -> Html {
     html! {
         <div class="panel debugger-panel">
             <div class="panel-header">
-                <h2>{"Visual Debugger"}</h2>
+                <h2>{"Debug"}</h2>
                 <div class="debug-controls">
                     <select class="debug-load-select" onchange={on_load_select}
                         title="Load an example or upload a .pipe file">
-                        <option value="" disabled=true selected=true>{"Load..."}</option>
+                        <option value="" disabled=true selected=true>{"Load example..."}</option>
                         <optgroup label="Examples">
                             { for TUTORIALS.iter().enumerate().map(|(idx, t)| {
                                 html! {
