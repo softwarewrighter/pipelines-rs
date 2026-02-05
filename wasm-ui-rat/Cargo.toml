@@ -1,0 +1,34 @@
+[package]
+name = "wasm-ui-rat"
+version = "0.1.0"
+edition = "2024"
+description = "Web UI for pipelines-rs (record-at-a-time)"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pipelines-rs = { path = ".." }
+yew = { version = "0.21", features = ["csr"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "console",
+    "Blob",
+    "Document",
+    "Event",
+    "File",
+    "FileList",
+    "FileReader",
+    "HtmlAnchorElement",
+    "HtmlInputElement",
+    "HtmlSelectElement",
+    "HtmlTextAreaElement",
+    "Url",
+    "Window",
+] }
+gloo = "0.11"
+console_error_panic_hook = "0.1"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

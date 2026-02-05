@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>pipelines-rs - Mainframe Pipeline Demo</title>
-    <link rel="icon" href="/pipelines-rs/favicon-f6f4616479439add.ico" integrity="sha384-yx1Xp8763Vya/xIxLFZwRHEJhUW6+qBUNcegwrP4CJ2e19RKLfx+aE7HmKNOuDrA"/>
+    <title>pipelines-rs (RAT) - Record-at-a-Time Pipeline Demo</title>
+    <link data-trunk rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
         :root {
             --bg-color: #1a1a2e;
@@ -964,22 +964,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="modulepreload" href="/pipelines-rs/wasm-ui-9ee9488f20a0df68.js" crossorigin="anonymous" integrity="sha384-q9nMyjTawPwZoCISPDvt+ywDk4974HoiZ27OmAir4Kq3mTJAXdqiDy84F6w1PNcX"><link rel="preload" href="/pipelines-rs/wasm-ui-9ee9488f20a0df68_bg.wasm" crossorigin="anonymous" integrity="sha384-yHo/1s85T9eBkLxC5SXYjMtGsnacNWE/LncwUC0CrTkEoNQr8PcAVD/pMtd+yrxO" as="fetch" type="application/wasm"></head>
+</head>
 <body>
     <script type="module">
         import init from './wasm_ui.js';
         init();
     </script>
-
-<script type="module">
-import init, * as bindings from '/pipelines-rs/wasm-ui-9ee9488f20a0df68.js';
-const wasm = await init({ module_or_path: '/pipelines-rs/wasm-ui-9ee9488f20a0df68_bg.wasm' });
-
-
-window.wasmBindings = bindings;
-
-
-dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
-
-</script></body>
+</body>
 </html>

@@ -200,7 +200,7 @@ mod tests {
         ];
         let output = execute_rat(input, &mut stages);
         assert_eq!(output.len(), 1);
-        assert_eq!(output[0].as_str().trim(), "COUNT=2");
+        assert_eq!(output[0].as_str().trim(), "2");
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod tests {
         let mut stages: Vec<Box<dyn RecordStage>> = vec![command_to_record_stage(&Command::Count)];
         let (output, trace) = execute_rat_traced(input, &mut stages);
         assert_eq!(output.len(), 1);
-        assert_eq!(output[0].as_str().trim(), "COUNT=1");
+        assert_eq!(output[0].as_str().trim(), "1");
         assert_eq!(trace.record_traces.len(), 1);
         // Record trace: input goes in, nothing comes out of COUNT
         assert_eq!(trace.record_traces[0].pipe_points[1].len(), 0);

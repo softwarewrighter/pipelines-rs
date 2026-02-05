@@ -9,7 +9,7 @@ use crate::Record;
 ///
 /// `pipe_points[0]` is the input (single record), `pipe_points[i]` is the
 /// output after stage `i-1`. Length is `num_stages + 1`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RecordTrace {
     /// Records present at each pipe point between stages.
     pub pipe_points: Vec<Vec<Record>>,
@@ -20,7 +20,7 @@ pub struct RecordTrace {
 /// `stage_index` identifies which stage produced the flush output.
 /// `pipe_points[0]` is the flush output, `pipe_points[i]` is after
 /// passing through `i` downstream stages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FlushTrace {
     /// Index of the stage that produced this flush output.
     pub stage_index: usize,
@@ -29,7 +29,7 @@ pub struct FlushTrace {
 }
 
 /// Complete debug trace of a record-at-a-time pipeline execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RatDebugTrace {
     /// Names of each stage in the pipeline.
     pub stage_names: Vec<String>,
@@ -60,7 +60,7 @@ mod tests {
     fn test_flush_trace_structure() {
         let trace = FlushTrace {
             stage_index: 1,
-            pipe_points: vec![vec![Record::from_str("COUNT=3")]],
+            pipe_points: vec![vec![Record::from_str("3")]],
         };
         assert_eq!(trace.stage_index, 1);
         assert_eq!(trace.pipe_points.len(), 1);

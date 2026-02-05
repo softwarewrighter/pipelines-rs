@@ -30,7 +30,7 @@
 //! - `LOCATE "pattern"` - Keep records containing pattern (grep-like)
 //! - `LOCATE pos,len "pattern"` - Keep records where field contains pattern
 //! - `NLOCATE "pattern"` - Keep records NOT containing pattern
-//! - `COUNT` - Count records and emit summary (e.g., "COUNT=42")
+//! - `COUNT` - Count records and emit count as a single record
 //! - `CHANGE "old" "new"` - Replace occurrences of old with new (sed-like)
 //! - `LITERAL "text"` - Append a literal record to the stream
 //! - `UPPER` - Convert records to uppercase
@@ -825,8 +825,7 @@ fn apply_command(records: Vec<Record>, cmd: &Command) -> Result<Vec<Record>, Str
         Command::Count => {
             // Count records and emit a single summary record
             let count = records.len();
-            let summary = format!("COUNT={count}");
-            Ok(vec![Record::from_str(&summary)])
+            Ok(vec![Record::from_str(&count.to_string())])
         }
         Command::Change { old, new } => {
             // Replace all occurrences of old with new in each record
@@ -1126,7 +1125,7 @@ DOE     JANE      SALES     00060000";
 
         assert_eq!(input_count, 3);
         assert_eq!(output_count, 1);
-        assert_eq!(output, "COUNT=3");
+        assert_eq!(output, "3");
     }
 
     #[test]

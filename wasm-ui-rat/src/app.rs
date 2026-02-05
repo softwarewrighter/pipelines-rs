@@ -482,7 +482,7 @@ pub fn app() -> Html {
         })
     };
 
-    // Debugger: run pipeline with debug info
+    // Debugger: run pipeline with debug trace
     let on_debug_run = {
         let state = state.clone();
         Callback::from(move |_: ()| {
@@ -490,19 +490,20 @@ pub fn app() -> Html {
             let lines = parse_pipeline_lines(&new_state.pipeline_text);
 
             match execute_pipeline_debug(&new_state.input_text, &new_state.pipeline_text) {
-                Ok((output, input_count, output_count, debug_info)) => {
-                    let stage_count = debug_info.len();
+                Ok((output, input_count, output_count, trace)) => {
+                    let stage_count = trace.stage_names.len();
+                    let total_steps = trace.record_traces.len() + trace.flush_traces.len();
                     new_state.debugger_state.active = true;
-                    new_state.debugger_state.debug_info = debug_info;
+                    new_state.debugger_state.trace = Some(trace);
                     new_state.debugger_state.current_step = 0;
+                    new_state.debugger_state.total_steps = total_steps;
                     new_state.debugger_state.stage_count = stage_count;
                     new_state.debugger_state.output_text = output;
                     new_state.debugger_state.input_count = input_count;
                     new_state.debugger_state.output_count = output_count;
                     new_state.debugger_state.pipeline_lines = lines;
                     new_state.debugger_state.error = None;
-                    // Keep existing watches (they reference stage indices)
-                    // Remove watches that reference out-of-range stages
+                    // Keep existing watches; remove out-of-range ones
                     new_state
                         .debugger_state
                         .watches
@@ -510,8 +511,9 @@ pub fn app() -> Html {
                 }
                 Err(e) => {
                     new_state.debugger_state.active = true;
-                    new_state.debugger_state.debug_info.clear();
+                    new_state.debugger_state.trace = None;
                     new_state.debugger_state.current_step = 0;
+                    new_state.debugger_state.total_steps = 0;
                     new_state.debugger_state.stage_count = 0;
                     new_state.debugger_state.output_text.clear();
                     new_state.debugger_state.pipeline_lines = lines;
@@ -523,16 +525,16 @@ pub fn app() -> Html {
         })
     };
 
-    // Debugger: step forward one stage
+    // Debugger: step forward one record (or flush)
     let on_debug_step = {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
-            if new_state.debugger_state.current_step < new_state.debugger_state.stage_count {
+            if new_state.debugger_state.current_step < new_state.debugger_state.total_steps {
                 new_state.debugger_state.current_step += 1;
 
-                // Update output panel when all stages complete
-                if new_state.debugger_state.current_step == new_state.debugger_state.stage_count {
+                // Update output panel when all steps complete
+                if new_state.debugger_state.current_step == new_state.debugger_state.total_steps {
                     new_state.output_text = new_state.debugger_state.output_text.clone();
                     new_state.stats = format!(
                         "Input: {} records | Output: {} records",
@@ -545,12 +547,12 @@ pub fn app() -> Html {
         })
     };
 
-    // Debugger: run all remaining stages
+    // Debugger: run all remaining steps
     let on_debug_run_all = {
         let state = state.clone();
         Callback::from(move |_: ()| {
             let mut new_state = (*state).clone();
-            new_state.debugger_state.current_step = new_state.debugger_state.stage_count;
+            new_state.debugger_state.current_step = new_state.debugger_state.total_steps;
             new_state.output_text = new_state.debugger_state.output_text.clone();
             new_state.stats = format!(
                 "Input: {} records | Output: {} records",
@@ -700,8 +702,8 @@ pub fn app() -> Html {
         <div class="app">
             <header class="header">
                 <div class="header-left">
-                    <h1>{ "pipelines-rs" }</h1>
-                    <p class="subtitle">{ "Mainframe-Style 80-Byte Record Processing" }</p>
+                    <h1>{ "pipelines-rs (RAT)" }</h1>
+                    <p class="subtitle">{ "Record-at-a-Time Execution" }</p>
                 </div>
                 <div class="header-right">
                     <div class="tab-switcher">

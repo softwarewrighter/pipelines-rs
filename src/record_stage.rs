@@ -200,7 +200,7 @@ impl RecordStage for CountStage {
     }
 
     fn flush(&mut self) -> Vec<Record> {
-        vec![Record::from_str(&format!("COUNT={}", self.count))]
+        vec![Record::from_str(&self.count.to_string())]
     }
 
     fn name(&self) -> &str {
@@ -520,7 +520,7 @@ mod tests {
         assert!(stage.process(Record::from_str("C")).is_empty());
         let flushed = stage.flush();
         assert_eq!(flushed.len(), 1);
-        assert_eq!(flushed[0].as_str().trim(), "COUNT=3");
+        assert_eq!(flushed[0].as_str().trim(), "3");
     }
 
     #[test]
@@ -528,7 +528,7 @@ mod tests {
         let mut stage = CountStage { count: 0 };
         let flushed = stage.flush();
         assert_eq!(flushed.len(), 1);
-        assert_eq!(flushed[0].as_str().trim(), "COUNT=0");
+        assert_eq!(flushed[0].as_str().trim(), "0");
     }
 
     #[test]
@@ -625,7 +625,7 @@ mod tests {
         stage.process(Record::from_str("A"));
         stage.process(Record::from_str("B"));
         let flushed = stage.flush();
-        assert_eq!(flushed[0].as_str().trim(), "COUNT=2");
+        assert_eq!(flushed[0].as_str().trim(), "2");
     }
 
     #[test]
